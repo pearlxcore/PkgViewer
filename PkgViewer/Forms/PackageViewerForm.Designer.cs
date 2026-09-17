@@ -80,7 +80,7 @@ partial class PackageViewerForm
     // Overview
     private DarkTableLayoutPanel _overviewLayout = null!;
     private DarkSectionPanel _overviewPanel = null!;
-    private OverviewSummaryView _overviewSummary = null!;
+    private DarkDataGridView _overviewSummary = null!;
     private DarkSectionPanel _sfoPanel = null!;
     private DarkDataGridView _sfoGrid = null!;
     private DataGridViewTextBoxColumn _sfoKeyColumn = null!;
@@ -475,7 +475,7 @@ partial class PackageViewerForm
     {
         _overviewLayout = new DarkTableLayoutPanel();
         _overviewPanel = new DarkSectionPanel();
-        _overviewSummary = new OverviewSummaryView();
+        _overviewSummary = new DarkDataGridView();
         _sfoPanel = new DarkSectionPanel();
         _sfoGrid = new DarkDataGridView();
         _sfoKeyColumn = new DataGridViewTextBoxColumn();
@@ -488,7 +488,11 @@ partial class PackageViewerForm
         ((System.ComponentModel.ISupportInitialize)_sfoGrid).BeginInit();
         _overviewLayout.SuspendLayout();
 
-        _overviewSummary.Dock = DockStyle.Fill;
+        SetupGrid(_overviewSummary);
+        _overviewSummary.ColumnHeadersVisible = false;
+        _overviewSummary.Columns.Add(TextColumn("Property", 30F));
+        _overviewSummary.Columns.Add(TextColumn("Value", 70F));
+        _overviewSummary.CellDoubleClick += OnOverviewSummaryCellDoubleClick;
 
         _overviewPanel.SectionHeader = "Package Summary";
         _overviewPanel.Dock = DockStyle.Fill;

@@ -67,7 +67,6 @@ internal sealed partial class PackageViewerForm : DarkForm
 
         // Runtime population of designer-created controls (image list images).
         FileIcons.Populate(_fileIcons);
-        _overviewSummary.ValueCopyRequested += (caption, value) => CopyToClipboard(value, caption);
 
         _fileSearchDebounce.Tick += (_, _) =>
         {
@@ -173,7 +172,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         SetImage(_iconBox, _session.Artwork.Icon);
         PopulateArtwork();
 
-        _overviewSummary.ClearRows();
+        _overviewSummary.Rows.Clear();
         SetOverviewValue("Title", info.Title);
         SetOverviewValue("Title ID", info.TitleId);
         SetOverviewValue("Content ID", info.ContentId);
@@ -488,13 +487,13 @@ internal sealed partial class PackageViewerForm : DarkForm
     }
 
     private void SetOverviewValue(string key, string value) =>
-        _overviewSummary.SetRow(key, string.IsNullOrWhiteSpace(value) ? "Not available" : value);
+        _overviewSummary.Rows.Add(key, string.IsNullOrWhiteSpace(value) ? "Not available" : value);
 
     /// <summary>Adds the backend's format-specific fields beneath the fixed summary rows.</summary>
     private void AppendOverviewExtras(IReadOnlyList<PackageInfoRow> rows)
     {
         foreach (PackageInfoRow row in rows)
-            _overviewSummary.SetRow(row.Label, row.Value);
+            _overviewSummary.Rows.Add(row.Label, row.Value);
     }
 
     private static void PopulateInspectionGrid(DarkDataGridView grid, IReadOnlyList<PackageInfoRow> rows, string emptyLabel)
@@ -2206,6 +2205,16 @@ internal sealed partial class PackageViewerForm : DarkForm
     private async void OnTabsSelectedIndexChanged(object? sender, EventArgs e) => await OnTabSelectedAsync();
 
     private void OnTitleDoubleClick(object? sender, EventArgs e) => CopyToClipboard(_titleLabel.Text, "Title");
+
+    /// <summary>Double-clicking a Package Summary row copies its value.</summary>
+    private void OnOverviewSummaryCellDoubleClick(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.RowIndex >= _overviewSummary.Rows.Count) return;
+        DataGridViewRow row = _overviewSummary.Rows[e.RowIndex];
+        string caption = row.Cells[0].Value?.ToString() ?? "Value";
+        string value = row.Cells[1].Value?.ToString() ?? string.Empty;
+        CopyToClipboard(value, caption);
+    }
 
     private void OnStatusWarningsClick(object? sender, EventArgs e) => ShowWarnings();
 

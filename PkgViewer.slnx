@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="PkgViewer.Core/PkgViewer.Core.csproj" />
+  <Project Path="PkgViewer/PkgViewer.csproj" />
+  <Project Path="PkgViewer.Tests/PkgViewer.Tests.csproj" />
+</Solution>

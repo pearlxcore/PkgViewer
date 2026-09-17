@@ -1,0 +1,560 @@
+using System.Drawing;
+using System.Windows.Forms;
+using DarkUI.Controls;
+using DarkUI.Forms;
+using PkgViewer.Core.Models;
+
+namespace PkgViewer.Forms;
+
+// UI construction for PackageViewerForm: control declarations, InitializeComponent and layout.
+partial class PackageViewerForm
+{
+    private System.ComponentModel.IContainer? components;
+
+    // Header bar
+    private readonly DarkHeaderBar _headerPanel = new() { ShowThemeSelector = false };
+    private readonly PictureBox _iconBox = new();
+    private readonly DarkLabel _titleLabel = new();
+    private readonly DarkLabel _subtitleLabel = new();
+    private readonly DarkLabel _contentIdLabel = new();
+
+    // Menu / status
+    private readonly DarkMenuStrip _menu = new();
+    private readonly DarkStatusStrip _statusStrip = new();
+    private readonly ToolStripStatusLabel _statusPath = new() { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly ToolStripStatusLabel _statusState = new();
+    private readonly DarkToolStripProgressBar _progressBar = new() { Visible = false, Style = ProgressBarStyle.Continuous };
+    private readonly DarkToolStripButton _stopExtractButton = new("Stop Extract") { Visible = false };
+
+    // Tabs
+    private readonly DarkTabControl _tabs = new();
+    private readonly DarkTabPage _overviewTab = new() { Text = "Overview", Padding = new Padding(12) };
+    private readonly DarkTabPage _packageTab = new() { Text = "PKG Internals", Padding = new Padding(12) };
+    private readonly DarkTabPage _trophyTab = new() { Text = "Trophy", Padding = new Padding(12) };
+    private readonly DarkTabPage _filesTab = new() { Text = "File Browser", Padding = new Padding(12) };
+    private readonly DarkTabPage _artworkTab = new() { Text = "Artwork", Padding = new Padding(12) };
+
+    // Overview
+    private readonly DarkSectionPanel _overviewPanel = new() { SectionHeader = "Package Summary" };
+    private readonly DarkSectionPanel _sfoPanel = new() { SectionHeader = "PARAM.SFO" };
+    private readonly DarkSectionPanel _paramJsonPanel = new() { SectionHeader = "param.json" };
+    private readonly DarkTreeView _paramJsonTree = new();
+    private readonly Dictionary<string, DarkLabel> _overviewValues = new();
+    private readonly DarkDataGridView _sfoGrid = new();
+    private TableLayoutPanel? _overviewLayout;
+
+    // PKG Internals
+    private readonly DarkTabControl _packageTabs = new();
+    private readonly DarkTabPage _headerTab = new() { Text = "Header" };
+    private readonly DarkTabPage _buildTab = new() { Text = "Build Info" };
+    private readonly DarkTabPage _entriesTab = new() { Text = "Entries" };
+    private readonly DarkDataGridView _headerGrid = new();
+    private readonly DarkDataGridView _buildGrid = new();
+    private readonly DarkDataGridView _entriesGrid = new();
+
+    // Trophy
+    private readonly DarkDataGridView _trophyGrid = new();
+    private readonly DarkLabel _trophyState = new() { Text = "Trophy information loads when this page is selected." };
+
+    // File browser
+    private readonly DarkSearchBox _fileFilter = new() { Placeholder = "Filter filename here" };
+    private readonly DarkTreeView _fileTree = new();
+    private readonly DarkListView _fileList = new();
+    private readonly ImageList _fileIcons = FileIcons.Create();
+    private readonly DarkContextMenu _fileContextMenu = new();
+    private readonly DarkSectionPanel _previewPanel = new() { SectionHeader = "File Preview" };
+    private readonly DarkLabel _previewInfo = new() { Text = "Double-click a file to preview it." };
+    private readonly Panel _previewBody = new() { BackColor = Color.FromArgb(20, 20, 20), Padding = new Padding(1) };
+    private readonly PictureBox _previewImage = new()
+    {
+        SizeMode = PictureBoxSizeMode.Zoom,
+        Visible = false,
+        BackColor = Color.FromArgb(20, 20, 20)
+    };
+    private readonly DarkTextBox _previewText = new()
+    {
+        Multiline = true,
+        ReadOnly = true,
+        ScrollBars = ScrollBars.Both,
+        WordWrap = false,
+        BorderStyle = BorderStyle.None,
+        Font = new Font("Consolas", 9F),
+        Visible = false
+    };
+
+    // Artwork
+    private readonly DarkSectionPanel _iconPanel = new() { SectionHeader = "ICON" };
+    private readonly DarkSectionPanel _pic0Panel = new() { SectionHeader = "PIC0" };
+    private readonly DarkSectionPanel _pic1Panel = new() { SectionHeader = "PIC1" };
+    private readonly DarkSectionPanel _pic2Panel = new() { SectionHeader = "PIC2" };
+    private readonly DarkLabel _iconEmpty = new() { Text = "No icon image in this package." };
+    private readonly DarkLabel _pic0Empty = new() { Text = "No PIC0 image in this package." };
+    private readonly DarkLabel _pic1Empty = new() { Text = "No PIC1 image in this package." };
+    private readonly DarkLabel _pic2Empty = new() { Text = "No PIC2 image in this package." };
+    private readonly PictureBox _iconArtBox = new() { SizeMode = PictureBoxSizeMode.Zoom, Visible = false };
+    private readonly PictureBox _pic0Box = new() { SizeMode = PictureBoxSizeMode.Zoom, Visible = false };
+    private readonly PictureBox _pic1Box = new() { SizeMode = PictureBoxSizeMode.Zoom, Visible = false };
+    private readonly PictureBox _pic2Box = new() { SizeMode = PictureBoxSizeMode.Zoom, Visible = false };
+    private TableLayoutPanel? _artworkLayout;
+
+    private void InitializeComponent()
+    {
+        Text = "PkgViewer";
+        FormBorderStyle = FormBorderStyle.FixedSingle;
+        MaximizeBox = false;
+        MinimumSize = new Size(800, 580);
+        ClientSize = new Size(1004, 600);
+        StartPosition = FormStartPosition.CenterScreen;
+
+        BuildMenu();
+        BuildHeader();
+        BuildTabs();
+        BuildStatus();
+
+        Controls.Add(_tabs);
+        Controls.Add(_headerPanel);
+        Controls.Add(_menu);
+        Controls.Add(_statusStrip);
+
+        Shown += async (_, _) =>
+        {
+            if (_shown) return;
+            _shown = true;
+            await LoadPackageAsync();
+        };
+        FormClosing += OnFormClosing;
+        _tabs.SelectedIndexChanged += async (_, _) => await OnTabSelectedAsync();
+    }
+
+    // ------------------------------------------------------------------
+    // Chrome (menu, header, status)
+    // ------------------------------------------------------------------
+
+    private void BuildMenu()
+    {
+        _menu.Dock = DockStyle.Top;
+        _menu.Font = new Font("Segoe UI", 9F);
+
+        var fileMenu = new ToolStripMenuItem("File");
+        var copyMenu = new ToolStripMenuItem("Copy");
+        copyMenu.DropDownItems.Add(MenuItem("TITLE_ID", () => CopyInfo("title_id")));
+        copyMenu.DropDownItems.Add(MenuItem("CONTENT_ID", () => CopyInfo("content_id")));
+        copyMenu.DropDownItems.Add(MenuItem("TITLE", () => CopyInfo("title")));
+        fileMenu.DropDownItems.Add(copyMenu);
+        fileMenu.DropDownItems.Add(new DarkToolStripSeparator());
+        fileMenu.DropDownItems.Add(MenuItem("Exit", Close));
+
+        var toolsMenu = new ToolStripMenuItem("Tools");
+        toolsMenu.DropDownItems.Add(MenuItem("Save Artwork", SaveArtwork));
+        toolsMenu.DropDownItems.Add(new DarkToolStripSeparator());
+
+        var integrationMenu = new ToolStripMenuItem("Integration");
+        integrationMenu.DropDownItems.Add(MenuItem("Add integration", AddIntegration));
+        integrationMenu.DropDownItems.Add(MenuItem("Remove integration", RemoveIntegration));
+        integrationMenu.DropDownItems.Add(new DarkToolStripSeparator());
+        integrationMenu.DropDownItems.Add(MenuItem("Remove legacy PS4 PKG Viewer", RemoveLegacyIntegration));
+        toolsMenu.DropDownItems.Add(integrationMenu);
+
+        var helpMenu = new ToolStripMenuItem("Help");
+        helpMenu.DropDownItems.Add(MenuItem("About", () => new AboutForm().ShowDialog(this)));
+        helpMenu.DropDownItems.Add(MenuItem("Buy me a coffee", OpenCoffeeLink));
+        helpMenu.DropDownItems.Add(MenuItem("Check for update", () => DarkMessageBox.ShowInformation(
+            "Update checking is not available in this build.", "PkgViewer")));
+
+        _menu.Items.Add(fileMenu);
+        _menu.Items.Add(toolsMenu);
+        _menu.Items.Add(helpMenu);
+        MainMenuStrip = _menu;
+    }
+
+    private static ToolStripMenuItem MenuItem(string text, Action action)
+    {
+        var item = new ToolStripMenuItem(text) { ForeColor = Color.FromArgb(220, 220, 220) };
+        item.Click += (_, _) => action();
+        return item;
+    }
+
+    private void BuildHeader()
+    {
+        _headerPanel.Dock = DockStyle.Top;
+        _headerPanel.Height = 104;
+        _headerPanel.Padding = new Padding(16, 12, 16, 12);
+
+        _iconBox.Location = new Point(16, 10);
+        _iconBox.Size = new Size(84, 84);
+        _iconBox.SizeMode = PictureBoxSizeMode.Zoom;
+        _iconBox.TabStop = false;
+
+        _titleLabel.Text = "PKG Viewer";
+        _titleLabel.Font = new Font("Segoe UI", 16F, FontStyle.Bold);
+        _titleLabel.Location = new Point(118, 12);
+        _titleLabel.Size = new Size(636, 27);
+
+        _subtitleLabel.Text = "Reading package metadata...";
+        _subtitleLabel.AutoEllipsis = true;
+        _subtitleLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _subtitleLabel.Location = new Point(118, 45);
+        _subtitleLabel.Size = new Size(680, 17);
+
+        _contentIdLabel.AutoEllipsis = true;
+        _contentIdLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _contentIdLabel.Location = new Point(118, 66);
+        _contentIdLabel.Size = new Size(680, 17);
+
+        _headerPanel.Controls.Add(_contentIdLabel);
+        _headerPanel.Controls.Add(_subtitleLabel);
+        _headerPanel.Controls.Add(_titleLabel);
+        _headerPanel.Controls.Add(_iconBox);
+    }
+
+    private void BuildStatus()
+    {
+        _statusStrip.Font = new Font("Segoe UI", 8.25F);
+        _statusPath.Text = _packagePath;
+        _statusState.Text = "Starting...";
+        _stopExtractButton.Click += (_, _) => StopExtraction();
+
+        _statusStrip.Items.Add(_statusPath);
+        _statusStrip.Items.Add(_statusState);
+        _statusStrip.Items.Add(new DarkToolStripSeparator());
+        _statusStrip.Items.Add(_progressBar);
+        _statusStrip.Items.Add(new DarkToolStripSeparator());
+        _statusStrip.Items.Add(_stopExtractButton);
+    }
+
+    private void BuildTabs()
+    {
+        _tabs.Dock = DockStyle.Fill;
+        _tabs.ItemSize = new Size(108, 28);
+        _tabs.Padding = new Point(0, 0);
+
+        BuildOverviewTab();
+        BuildPackageTab();
+        BuildTrophyTab();
+        BuildFilesTab();
+        BuildArtworkTab();
+
+        _tabs.TabPages.Add(_overviewTab);
+        _tabs.TabPages.Add(_packageTab);
+        _tabs.TabPages.Add(_trophyTab);
+        _tabs.TabPages.Add(_filesTab);
+        _tabs.TabPages.Add(_artworkTab);
+    }
+
+    // ------------------------------------------------------------------
+    // Overview
+    // ------------------------------------------------------------------
+
+    private void BuildOverviewTab()
+    {
+        string[] captions =
+        [
+            "Title", "Title ID", "Content ID", "Category", "Package state",
+            "Application version", "Package version", "Required firmware", "Package size"
+        ];
+
+        var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 9 };
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130F));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        for (int row = 0; row < 9; row++)
+        {
+            table.RowStyles.Add(new RowStyle(SizeType.Percent, 11.11111F));
+
+            var caption = new DarkLabel
+            {
+                Text = captions[row],
+                Dock = DockStyle.Fill,
+                Margin = new Padding(3),
+                Font = new Font("Segoe UI", 9F),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            var value = new DarkLabel
+            {
+                Text = "Not available",
+                Dock = DockStyle.Fill,
+                Margin = new Padding(3),
+                Font = row == 0 ? new Font("Segoe UI", 9F, FontStyle.Bold) : new Font("Segoe UI", 9F),
+                TextAlign = ContentAlignment.MiddleLeft,
+                AutoEllipsis = true
+            };
+            _overviewValues[captions[row]] = value;
+            table.Controls.Add(caption, 0, row);
+            table.Controls.Add(value, 1, row);
+        }
+
+        _overviewPanel.Dock = DockStyle.Fill;
+        _overviewPanel.Margin = new Padding(0, 0, 6, 0);
+        _overviewPanel.Padding = new Padding(16, 12, 16, 16);
+        _overviewPanel.Controls.Add(table);
+
+        SetupGrid(_sfoGrid);
+        _sfoGrid.Columns.Add(TextColumn("Key", 35F));
+        _sfoGrid.Columns.Add(TextColumn("Value", 65F));
+        _sfoPanel.Dock = DockStyle.Fill;
+        _sfoPanel.Margin = new Padding(6, 0, 0, 0);
+        _sfoPanel.Controls.Add(_sfoGrid);
+
+        _paramJsonPanel.Dock = DockStyle.Fill;
+        _paramJsonPanel.Margin = new Padding(6, 0, 0, 0);
+        _paramJsonTree.Dock = DockStyle.Fill;
+        _paramJsonTree.ShowLines = true;
+        _paramJsonTree.ShowPlusMinus = true;
+        _paramJsonTree.ShowRootLines = true;
+        _paramJsonPanel.Controls.Add(_paramJsonTree);
+
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        layout.Controls.Add(_overviewPanel, 0, 0);
+        layout.Controls.Add(_sfoPanel, 1, 0);
+        _overviewLayout = layout;
+        _overviewTab.Controls.Add(layout);
+    }
+
+    // ------------------------------------------------------------------
+    // PKG Internals
+    // ------------------------------------------------------------------
+
+    private void BuildPackageTab()
+    {
+        _packageTabs.Dock = DockStyle.Fill;
+        _packageTabs.ItemSize = new Size(88, 28);
+        _packageTabs.Padding = new Point(0, 0);
+
+        SetupGrid(_headerGrid);
+        _headerGrid.Columns.Add(TextColumn("Field", 38F));
+        _headerGrid.Columns.Add(TextColumn("Value", 62F));
+        _headerTab.Controls.Add(_headerGrid);
+
+        SetupGrid(_buildGrid);
+        _buildGrid.Columns.Add(TextColumn("Field", 38F));
+        _buildGrid.Columns.Add(TextColumn("Value", 62F));
+        _buildTab.Controls.Add(_buildGrid);
+
+        SetupGrid(_entriesGrid);
+        _entriesGrid.Columns.Add(TextColumn("Name", 24F));
+        _entriesGrid.Columns.Add(TextColumn("Offset", 17F));
+        _entriesGrid.Columns.Add(TextColumn("Size", 17F));
+        _entriesGrid.Columns.Add(TextColumn("Flags 1", 14F));
+        _entriesGrid.Columns.Add(TextColumn("Flags 2", 14F));
+        _entriesGrid.Columns.Add(TextColumn("Encrypted?", 14F));
+        _entriesTab.Controls.Add(_entriesGrid);
+
+        _packageTabs.TabPages.Add(_headerTab);
+        _packageTabs.TabPages.Add(_buildTab);
+        _packageTabs.TabPages.Add(_entriesTab);
+        _packageTab.Controls.Add(_packageTabs);
+    }
+
+    // ------------------------------------------------------------------
+    // Trophy
+    // ------------------------------------------------------------------
+
+    private void BuildTrophyTab()
+    {
+        SetupGrid(_trophyGrid);
+        _trophyGrid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
+        _trophyGrid.RowTemplate.Height = 52;
+        _trophyGrid.Columns.Add(new DataGridViewImageColumn
+        {
+            HeaderText = "Icon",
+            FillWeight = 10F,
+            ImageLayout = DataGridViewImageCellLayout.Zoom,
+            ReadOnly = true,
+            Resizable = DataGridViewTriState.True
+        });
+        _trophyGrid.Columns.Add(TextColumn("ID", 8F));
+        _trophyGrid.Columns.Add(TextColumn("Name", 23F));
+        _trophyGrid.Columns.Add(TextColumn("Description", 39F));
+        _trophyGrid.Columns.Add(TextColumn("Type", 12F));
+        _trophyGrid.Columns.Add(TextColumn("Hidden", 8F));
+
+        _trophyState.Dock = DockStyle.Top;
+        _trophyState.Height = 30;
+        _trophyState.Font = new Font("Segoe UI", 8.5F, FontStyle.Italic);
+        _trophyState.Padding = new Padding(10, 7, 10, 7);
+        _trophyState.TextAlign = ContentAlignment.MiddleLeft;
+
+        _trophyTab.Controls.Add(_trophyGrid);
+        _trophyTab.Controls.Add(_trophyState);
+    }
+
+    // ------------------------------------------------------------------
+    // File Browser
+    // ------------------------------------------------------------------
+
+    private void BuildFilesTab()
+    {
+        _fileTree.CheckBoxes = false;
+        _fileTree.FullRowSelect = false;
+        _fileTree.HotTracking = false;
+        _fileTree.LabelEdit = false;
+        _fileTree.Indent = 19;
+        _fileTree.ItemHeight = 24;
+        _fileTree.ShowLines = true;
+        _fileTree.ShowPlusMinus = true;
+        _fileTree.ShowRootLines = true;
+        _fileTree.AfterSelect += (_, _) => RefreshFileList();
+
+        _fileList.View = View.Details;
+        _fileList.FullRowSelect = true;
+        _fileList.MultiSelect = false;
+        _fileList.Columns.Add("Name", 143);
+        _fileList.Columns.Add("Type", 143);
+        _fileList.Columns.Add("Path", 143);
+        _fileList.Columns.Add("Size", 143);
+        _fileList.ItemActivate += (_, _) => ActivateFileListItem();
+        _fileList.MouseClick += OnFileListMouseClick;
+
+        _fileTree.ImageList = _fileIcons;
+        _fileList.SmallImageList = _fileIcons;
+        BuildFileContextMenu();
+
+        _previewInfo.Dock = DockStyle.Top;
+        _previewInfo.AutoEllipsis = true;
+        _previewInfo.Height = 34;
+        _previewInfo.Padding = new Padding(8, 0, 8, 0);
+        _previewInfo.TextAlign = ContentAlignment.MiddleLeft;
+        _previewImage.Dock = DockStyle.Fill;
+        _previewText.Dock = DockStyle.Fill;
+        _previewBody.Dock = DockStyle.Fill;
+        _previewBody.Controls.Add(_previewImage);
+        _previewBody.Controls.Add(_previewText);
+        _previewPanel.Controls.Add(_previewBody);
+        _previewPanel.Controls.Add(_previewInfo);
+        _previewInfo.BringToFront();
+
+        // Draggable three-pane split: folder tree | content list | file preview.
+        var split = new DarkSplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = DarkSplitContainer.DarkSplitOrientation.Vertical,
+            SplitterWidth = 6
+        };
+        split.AddPanel(_fileTree);
+        split.AddPanel(_fileList);
+        split.AddPanel(_previewPanel);
+        split.PanelSizes = [260, 340, 340];
+
+        _fileFilter.Dock = DockStyle.Fill;
+        _fileFilter.SearchTextChanged += (_, _) => RefreshFileList();
+
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        layout.Controls.Add(_fileFilter, 0, 0);
+        layout.Controls.Add(split, 0, 1);
+        _filesTab.Controls.Add(layout);
+    }
+
+    // ------------------------------------------------------------------
+    // Artwork
+    // ------------------------------------------------------------------
+
+    private void BuildArtworkTab()
+    {
+        BuildArtworkPanel(_iconPanel, _iconEmpty, _iconArtBox);
+        BuildArtworkPanel(_pic0Panel, _pic0Empty, _pic0Box);
+        BuildArtworkPanel(_pic1Panel, _pic1Empty, _pic1Box);
+        BuildArtworkPanel(_pic2Panel, _pic2Empty, _pic2Box);
+        _artworkTab.Controls.Add(BuildArtworkLayout(isPs4: true));
+    }
+
+    /// <summary>PS4 shows PIC0/PIC1; PS5 additionally shows the icon and PIC2 (all with placeholders).</summary>
+    private TableLayoutPanel BuildArtworkLayout(bool isPs4)
+    {
+        var table = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = isPs4 ? 1 : 2
+        };
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+
+        // Margins are assigned per layout: the reused panels must not keep the other layout's margins.
+        if (isPs4)
+        {
+            table.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            _pic0Panel.Margin = new Padding(0, 0, 8, 0);
+            _pic1Panel.Margin = new Padding(8, 0, 0, 0);
+            table.Controls.Add(_pic0Panel, 0, 0);
+            table.Controls.Add(_pic1Panel, 1, 0);
+        }
+        else
+        {
+            table.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+            table.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+            _iconPanel.Margin = new Padding(0, 0, 8, 8);
+            _pic0Panel.Margin = new Padding(8, 0, 0, 8);
+            _pic1Panel.Margin = new Padding(0, 8, 8, 0);
+            _pic2Panel.Margin = new Padding(8, 8, 0, 0);
+            table.Controls.Add(_iconPanel, 0, 0);
+            table.Controls.Add(_pic0Panel, 1, 0);
+            table.Controls.Add(_pic1Panel, 0, 1);
+            table.Controls.Add(_pic2Panel, 1, 1);
+        }
+
+        _artworkLayout = table;
+        return table;
+    }
+
+    private static void BuildArtworkPanel(DarkSectionPanel panel, DarkLabel empty, PictureBox box)
+    {
+        panel.Dock = DockStyle.Fill;
+        panel.Padding = new Padding(12, 10, 12, 12);
+        empty.Dock = DockStyle.Fill;
+        empty.Font = new Font("Segoe UI", 9F, FontStyle.Italic);
+        empty.TextAlign = ContentAlignment.MiddleCenter;
+        box.Dock = DockStyle.Fill;
+        box.TabStop = false;
+        panel.Controls.Add(empty);
+        panel.Controls.Add(box);
+    }
+
+    // ------------------------------------------------------------------
+    // Grid helpers
+    // ------------------------------------------------------------------
+
+    private static void SetupGrid(DarkDataGridView grid)
+    {
+        grid.Dock = DockStyle.Fill;
+        grid.AllowUserToAddRows = false;
+        grid.AllowUserToDeleteRows = false;
+        grid.AllowUserToOrderColumns = true;
+        grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        grid.MultiSelect = false;
+        grid.ReadOnly = true;
+        grid.RowHeadersVisible = false;
+        grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        grid.BackgroundColor = Color.FromArgb(20, 20, 20);
+    }
+
+    private static DataGridViewTextBoxColumn TextColumn(string header, float fillWeight) => new()
+    {
+        HeaderText = header,
+        FillWeight = fillWeight,
+        ReadOnly = true,
+        Resizable = DataGridViewTriState.True
+    };
+
+    private void BuildFileContextMenu()
+    {
+        _fileContextMenu.Items.Add(MenuItem("Extract selected item",
+            () => _ = ExtractSelectedAsync(preserveStructure: false)));
+        _fileContextMenu.Items.Add(MenuItem("Extract selected (with folder structure)",
+            () => _ = ExtractSelectedAsync(preserveStructure: true)));
+        _fileContextMenu.Items.Add(new DarkToolStripSeparator());
+        _fileContextMenu.Items.Add(MenuItem("Copy path", CopySelectedPath));
+        _fileContextMenu.Items.Add(MenuItem("Copy filename", CopySelectedName));
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            components?.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+}

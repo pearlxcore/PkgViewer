@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>PkgViewer</AssemblyName>
+    <RootNamespace>PkgViewer</RootNamespace>
+    <Product>PkgViewer</Product>
+    <ApplicationIcon>PackageIcon.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="PackageIcon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PkgViewer.Core\PkgViewer.Core.csproj" />
+    <ProjectReference Include="..\..\DarkUI\DarkUI\DarkUI.csproj" />
+  </ItemGroup>
+  <Target Name="RemoveEnginePublishNoise" AfterTargets="Publish" Condition="'$(PublishSingleFile)' == 'true'">
+    <ItemGroup>
+      <EnginePublishNoise Include="$(PublishDir)OrbisPkgTool.exe" />
+      <EnginePublishNoise Include="$(PublishDir)OrbisPkgTool.deps.json" />
+      <EnginePublishNoise Include="$(PublishDir)OrbisPkgTool.runtimeconfig.json" />
+      <EnginePublishNoise Include="$(PublishDir)*.pdb" />
+    </ItemGroup>
+    <Delete Files="@(EnginePublishNoise)" />
+  </Target>
+</Project>

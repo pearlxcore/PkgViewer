@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>PkgViewer.Core</AssemblyName>
+    <RootNamespace>PkgViewer.Core</RootNamespace>
+    <Description>UI-free format probing and package reading facade shared by the PkgViewer desktop app.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\PS4PKGTool\PS4PKGTool.Core\PS4PKGTool.Core.csproj" />
+    <ProjectReference Include="..\..\PS5PKGTool\PS5PKGTool.Core\PS5PKGTool.Core.csproj" />
+  </ItemGroup>
+</Project>

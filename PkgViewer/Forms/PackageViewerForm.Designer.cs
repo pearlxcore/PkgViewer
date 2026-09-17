@@ -26,7 +26,6 @@ partial class PackageViewerForm
     private ToolStripMenuItem _toolsMenu = null!;
     private ToolStripMenuItem _helpMenu = null!;
     private ToolStripMenuItem _openMenuItem = null!;
-    private ToolStripMenuItem _closeMenuItem = null!;
     private ToolStripMenuItem _extractAllMenuItem = null!;
     private ToolStripMenuItem _saveArtworkMenuItem = null!;
     private ToolStripMenuItem _exportMetadataMenuItem = null!;
@@ -237,7 +236,6 @@ partial class PackageViewerForm
         _menu = new DarkMenuStrip();
         _fileMenu = new ToolStripMenuItem();
         _openMenuItem = new ToolStripMenuItem();
-        _closeMenuItem = new ToolStripMenuItem();
         _fileSeparator1 = new DarkToolStripSeparator();
         _extractAllMenuItem = new ToolStripMenuItem();
         _saveArtworkMenuItem = new ToolStripMenuItem();
@@ -281,7 +279,6 @@ partial class PackageViewerForm
 
         _fileMenu.Text = "File";
         ConfigureMenuItem(_openMenuItem, "Open...", Keys.Control | Keys.O, OnMenuOpen);
-        ConfigureMenuItem(_closeMenuItem, "Close", Keys.None, OnMenuClose);
         ConfigureMenuItem(_extractAllMenuItem, "Extract All...", Keys.Control | Keys.Shift | Keys.E, OnMenuExtractAll);
         ConfigureMenuItem(_saveArtworkMenuItem, "Save Artwork...", Keys.None, OnMenuSaveArtwork);
         ConfigureMenuItem(_exportMetadataMenuItem, "Export Metadata...", Keys.None, OnMenuExportMetadata);
@@ -289,7 +286,7 @@ partial class PackageViewerForm
         ConfigureMenuItem(_exitMenuItem, "Exit", Keys.None, OnMenuExit);
         _fileMenu.DropDownItems.AddRange(new ToolStripItem[]
         {
-            _openMenuItem, _closeMenuItem, _fileSeparator1, _extractAllMenuItem, _saveArtworkMenuItem,
+            _openMenuItem, _fileSeparator1, _extractAllMenuItem, _saveArtworkMenuItem,
             _exportMetadataMenuItem, _fileSeparator2, _openSourceFolderMenuItem, _exitMenuItem
         });
 

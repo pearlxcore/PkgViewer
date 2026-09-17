@@ -301,15 +301,23 @@ internal sealed class Ps5PackageSession : IPackageSession
                 await using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write,
                     FileShare.None, 1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
                 {
-                    byte[] buffer = new byte[1024 * 1024];
-                    long copied = 0;
-                    while (true)
+                    // Rent the copy buffer so many-small-file extraction does not allocate per entry.
+                    byte[] buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(1024 * 1024);
+                    try
                     {
-                        int read = await input.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-                        if (read == 0) break;
-                        await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-                        copied += read;
-                        progress?.Report(copied);
+                        long copied = 0;
+                        while (true)
+                        {
+                            int read = await input.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+                            if (read == 0) break;
+                            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                            copied += read;
+                            progress?.Report(copied);
+                        }
+                    }
+                    finally
+                    {
+                        System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
                     }
                 }
                 File.Move(temp, target, overwrite: true);

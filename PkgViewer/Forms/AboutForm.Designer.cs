@@ -13,7 +13,6 @@ partial class AboutForm
     private DarkLabel lblVersion = null!;
     private DarkLabel lblCopyright = null!;
     private DarkLabel lblCredits = null!;
-    private DarkLabel lblComponents = null!;
     private DarkButton btnGitHub = null!;
     private DarkButton btnKofi = null!;
     private DarkButton btnPayPal = null!;
@@ -33,7 +32,6 @@ partial class AboutForm
         lblVersion = new DarkLabel();
         lblCopyright = new DarkLabel();
         lblCredits = new DarkLabel();
-        lblComponents = new DarkLabel();
         btnGitHub = new DarkButton();
         btnKofi = new DarkButton();
         btnPayPal = new DarkButton();
@@ -71,12 +69,6 @@ partial class AboutForm
         lblCredits.Size = new Size(380, 46);
         lblCredits.Text = "Credit to Robin Perris, SvenGDK, PSBrew, Renan Barreto,\r\nkerrdec97, strongt1me, Sony";
 
-        lblComponents.Font = new Font("Segoe UI", 9F);
-        lblComponents.Location = new Point(20, 152);
-        lblComponents.Name = "lblComponents";
-        lblComponents.Size = new Size(380, 20);
-        lblComponents.Text = "PS4 via OrbisPkgTool; PS5 via the clean-room ProsperoPkgTool engine.";
-
         btnGitHub.Font = new Font("Segoe UI", 9F);
         btnGitHub.Location = new Point(20, 182);
         btnGitHub.Name = "btnGitHub";
@@ -112,7 +104,6 @@ partial class AboutForm
         Controls.Add(btnPayPal);
         Controls.Add(btnKofi);
         Controls.Add(btnGitHub);
-        Controls.Add(lblComponents);
         Controls.Add(lblCredits);
         Controls.Add(lblCopyright);
         Controls.Add(lblVersion);

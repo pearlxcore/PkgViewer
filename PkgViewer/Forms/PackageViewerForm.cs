@@ -46,7 +46,10 @@ internal sealed partial class PackageViewerForm : DarkForm
     private CancellationTokenSource? _previewCancellation;
     private CancellationTokenSource _lifetimeCancellation = new();
     private int _previewVersion;
+    private int _openGeneration;
     private bool _closing;
+    private bool _closeAfterExtraction;
+    private readonly System.Windows.Forms.Timer _fileSearchDebounce = new() { Interval = 200 };
     private TreeNode? _fileRootNode;
     private DataGridView? _contextGrid;
     private string _lastExtractionDirectory;
@@ -65,6 +68,12 @@ internal sealed partial class PackageViewerForm : DarkForm
         // Runtime population of designer-created controls (image list images, summary rows).
         FileIcons.Populate(_fileIcons);
         InitializeOverviewRows();
+
+        _fileSearchDebounce.Tick += (_, _) =>
+        {
+            _fileSearchDebounce.Stop();
+            RefreshFileList();
+        };
 
         _previewPaneMenuItem.Checked = _settings.PreviewPaneVisible;
         SetPreviewPaneVisible(_settings.PreviewPaneVisible);
@@ -90,33 +99,52 @@ internal sealed partial class PackageViewerForm : DarkForm
     // Loading
     // ------------------------------------------------------------------
 
-    private async Task LoadPackageAsync()
+    private async Task LoadPackageAsync(string path)
     {
+        // Each open owns a generation; a superseded open's result is disposed rather than published.
+        int generation = ++_openGeneration;
         SetLoadingState(true, "Reading package metadata...");
+        _statusPath.Text = path;
         try
         {
-            IPackageSession session = await _openService.OpenAsync(
-                _currentPackagePath, new PackageOpenOptions { Passcode = _passcode });
-            _session?.Dispose();
+            CancellationToken token = _lifetimeCancellation.Token;
+            // Probe + backend open run off the UI thread (the probe reads file signatures, which can
+            // block on a slow or network source).
+            IPackageSession session = await Task.Run(
+                () => _openService.OpenAsync(path, new PackageOpenOptions { Passcode = _passcode }, token), token);
+            if (generation != _openGeneration || _closing)
+            {
+                session.Dispose();
+                return;
+            }
+
+            IPackageSession? previous = _session;
             _session = session;
+            _currentPackagePath = path;
+            previous?.Dispose();
+
             Populate();
             SetLoadingState(false, "Ready");
             await OnTabSelectedAsync();
         }
         catch (OperationCanceledException)
         {
-            SetLoadingState(false, "Ready");
+            if (generation == _openGeneration) SetLoadingState(false, "Ready");
         }
         catch (Exception ex)
         {
+            if (generation != _openGeneration) return;
             Logger.Exception("Open package", ex);
-            if (_passcode is null && IsPasscodeFailure(ex) && PromptForPasscode(out string? passcode))
+            // PS5 reading has no credential-aware path, so a passcode prompt there would be misleading.
+            if (_passcode is null && IsPasscodeFailure(ex) && !IsPs5Source(ex) &&
+                PromptForPasscode(out string? passcode))
             {
                 _passcode = passcode;
-                await LoadPackageAsync();
+                await LoadPackageAsync(path);
                 return;
             }
             SetLoadingState(false, "Unable to read package");
+            _statusPath.Text = _currentPackagePath;
             DarkMessageBox.ShowError(
                 "The supplied file could not be read as a PS4/PS5 package.\n\n" + ex.Message, "PkgViewer");
         }
@@ -286,10 +314,12 @@ internal sealed partial class PackageViewerForm : DarkForm
     {
         if (_session is null || _detailTabsLoaded) return;
         _detailTabsLoaded = true;
+        IPackageSession session = _session;
+        int generation = _openGeneration;
         try
         {
-            IReadOnlyList<PackageDetailTab> tabs = await _session.GetDetailTabsAsync(_lifetimeCancellation.Token);
-            if (_session is null || IsDisposed) return;
+            IReadOnlyList<PackageDetailTab> tabs = await session.GetDetailTabsAsync(_lifetimeCancellation.Token);
+            if (IsDisposed || session != _session || generation != _openGeneration) return;
             Logger.Info("Detail tabs: " + (tabs.Count == 0 ? "(none)" : string.Join(", ", tabs.Select(tab => tab.Title))));
             ShowDetailTabs(tabs);
             AppendNewWarnings();
@@ -350,11 +380,15 @@ internal sealed partial class PackageViewerForm : DarkForm
     {
         if (_session is null || _filesLoaded) return;
         _filesLoaded = true;
+        IPackageSession session = _session;
+        int generation = _openGeneration;
         _statusState.Text = "Loading package file list...";
         try
         {
-            _allFiles = await _session.GetFilesAsync(_lifetimeCancellation.Token);
-            if (IsDisposed) return;
+            IReadOnlyList<PackageFileRecord> files = await session.GetFilesAsync(_lifetimeCancellation.Token);
+            // Reject results if the source changed while the listing loaded.
+            if (IsDisposed || session != _session || generation != _openGeneration) return;
+            _allFiles = files;
             PopulateFileTree();
             _statusState.Text = "Ready";
             UpdateMenuStates();
@@ -376,12 +410,14 @@ internal sealed partial class PackageViewerForm : DarkForm
     {
         if (_session is null || _trophiesLoaded) return;
         _trophiesLoaded = true;
+        IPackageSession session = _session;
+        int generation = _openGeneration;
         _trophyState.Text = "Loading trophy information...";
         _statusState.Text = "Loading trophy information...";
         try
         {
-            IReadOnlyList<PackageTrophy> trophies = await _session.GetTrophiesAsync(_lifetimeCancellation.Token);
-            if (IsDisposed) return;
+            IReadOnlyList<PackageTrophy> trophies = await session.GetTrophiesAsync(_lifetimeCancellation.Token);
+            if (IsDisposed || session != _session || generation != _openGeneration) return;
             PopulateTrophies(trophies);
             _statusState.Text = "Ready";
         }
@@ -964,10 +1000,13 @@ internal sealed partial class PackageViewerForm : DarkForm
             return new PreviewResult(BitmapFromRgba(rgba, width, height), null, null);
         }
 
-        byte[] buffer = ReadAtMost(stream, MaximumTextBytes);
+        // Classify from a small sample first so a binary file is not read up to the full text budget
+        // just to show a 16 KiB hex preview; text files continue reading up to the text budget.
+        byte[] sample = ReadAtMost(stream, MaximumHexBytes);
         token.ThrowIfCancellationRequested();
-        if (IsProbablyText(buffer, out Encoding encoding))
+        if (IsProbablyText(sample, out Encoding encoding))
         {
+            byte[] buffer = ReadUpTo(stream, sample, MaximumTextBytes);
             string text = encoding.GetString(buffer);
             if (size > buffer.Length)
                 text += Environment.NewLine +
@@ -975,11 +1014,26 @@ internal sealed partial class PackageViewerForm : DarkForm
             return new PreviewResult(null, text, null);
         }
 
-        int hexLength = Math.Min(buffer.Length, MaximumHexBytes);
-        string header = size > hexLength
-            ? $"[hex preview: first {FormatByteSize(hexLength)} of {FormatByteSize(size)}]{Environment.NewLine}"
+        string header = size > sample.Length
+            ? $"[hex preview: first {FormatByteSize(sample.Length)} of {FormatByteSize(size)}]{Environment.NewLine}"
             : string.Empty;
-        return new PreviewResult(null, header + BuildHexDump(buffer[..hexLength]), null);
+        return new PreviewResult(null, header + BuildHexDump(sample), null);
+    }
+
+    /// <summary>Continues reading from <paramref name="stream"/> after an initial sample, up to a cap.</summary>
+    private static byte[] ReadUpTo(Stream stream, byte[] initial, int maximumBytes)
+    {
+        if (initial.Length >= maximumBytes) return initial;
+        byte[] buffer = new byte[maximumBytes];
+        Array.Copy(initial, buffer, initial.Length);
+        int total = initial.Length;
+        while (total < maximumBytes)
+        {
+            int read = stream.Read(buffer, total, maximumBytes - total);
+            if (read == 0) break;
+            total += read;
+        }
+        return total == buffer.Length ? buffer : buffer[..total];
     }
 
     /// <summary>
@@ -1299,6 +1353,13 @@ internal sealed partial class PackageViewerForm : DarkForm
         _statusState.Text = "Ready";
         UpdateStatusSeparators();
         UpdateFileActionState();
+
+        // A close requested during extraction waits until the extraction has unwound.
+        if (_closeAfterExtraction)
+        {
+            _closeAfterExtraction = false;
+            BeginInvoke(new Action(Close));
+        }
     }
 
     private void StopExtraction()
@@ -1471,10 +1532,9 @@ internal sealed partial class PackageViewerForm : DarkForm
     private void OpenDroppedFile(string path)
     {
         if (!File.Exists(path)) return;
-        _currentPackagePath = Path.GetFullPath(path);
+        // The active path/session only change once the new source opens successfully.
         _passcode = null;
-        _statusPath.Text = _currentPackagePath;
-        _ = LoadPackageAsync();
+        _ = LoadPackageAsync(Path.GetFullPath(path));
     }
 
     private void OpenSourceFolder()
@@ -1601,7 +1661,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         }
         if (!PromptForPasscode(out string? passcode)) return;
         _passcode = passcode;
-        await LoadPackageAsync();
+        await LoadPackageAsync(_currentPackagePath);
     }
 
     private void ShowAssociations() => new FileAssociationsForm().ShowDialog(this);
@@ -1723,7 +1783,8 @@ internal sealed partial class PackageViewerForm : DarkForm
         bool hasSession = _session is not null;
         if (_retryAccessMenuItem is not null) _retryAccessMenuItem.Enabled = hasSession;
         if (_exportMetadataMenuItem is not null) _exportMetadataMenuItem.Enabled = hasSession;
-        if (_extractAllMenuItem is not null) _extractAllMenuItem.Enabled = hasSession && _filesLoaded && !_busy;
+        // The action loads its own file index, so it does not require a prior Files-tab visit.
+        if (_extractAllMenuItem is not null) _extractAllMenuItem.Enabled = hasSession && !_busy;
     }
 
     private void statusOnly(string text) => _statusState.Text = text;
@@ -1906,6 +1967,10 @@ internal sealed partial class PackageViewerForm : DarkForm
     private static bool IsPasscodeFailure(Exception exception) =>
         exception.Message.Contains("passcode", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>True when the failed open was a PS5 source (no supported passcode path exists).</summary>
+    private static bool IsPs5Source(Exception exception) =>
+        exception is PackageOpenException { Probe.Platform: PkgPlatform.Ps5 };
+
     // ------------------------------------------------------------------
     // State / lifecycle
     // ------------------------------------------------------------------
@@ -1934,17 +1999,26 @@ internal sealed partial class PackageViewerForm : DarkForm
 
     private void OnFormClosing(object? sender, FormClosingEventArgs e)
     {
-        if (_extractCancellation is not null)
+        if (_extractCancellation is not null && !_closeAfterExtraction)
         {
             e.Cancel = true;
             if (DarkMessageBox.ShowWarning(
                     "Extraction is in progress. Stop it and close?", "PkgViewer",
                     DarkDialogButton.YesNo) != DialogResult.Yes)
-                return;
+                return; // declining leaves the session fully usable
+
+            // Cancel and wait for the extraction to unwind; EndExtractionUi closes the window once it
+            // is safe (disposing while the reader is still running would race it).
+            _closeAfterExtraction = true;
+            _statusState.Text = "Stopping extraction...";
+            _stopExtractButton.Enabled = false;
             _extractCancellation.Cancel();
+            return;
         }
 
         _closing = true;
+        _fileSearchDebounce.Stop();
+        _fileSearchDebounce.Dispose();
         _lifetimeCancellation.Cancel();
         _previewCancellation?.Cancel();
         CaptureFileLayout();
@@ -2143,7 +2217,7 @@ internal sealed partial class PackageViewerForm : DarkForm
     {
         if (_shown) return;
         _shown = true;
-        await LoadPackageAsync();
+        await LoadPackageAsync(_currentPackagePath);
     }
 
     private async void OnTabsSelectedIndexChanged(object? sender, EventArgs e) => await OnTabSelectedAsync();
@@ -2161,7 +2235,12 @@ internal sealed partial class PackageViewerForm : DarkForm
 
     private void OnTrophyFilterChanged(object? sender, EventArgs e) => ApplyTrophyFilter();
 
-    private void OnFileFilterChanged(object? sender, EventArgs e) => RefreshFileList();
+    private void OnFileFilterChanged(object? sender, EventArgs e)
+    {
+        // Debounce so typing does not rebuild the result list on every keystroke.
+        _fileSearchDebounce.Stop();
+        _fileSearchDebounce.Start();
+    }
 
     private void OnFileTreeAfterSelect(object? sender, TreeViewEventArgs e) => OnFileTreeNodeSelected();
 
@@ -2230,7 +2309,6 @@ internal sealed partial class PackageViewerForm : DarkForm
     }
 
     private void OnMenuOpen(object? sender, EventArgs e) => OpenAnotherPackage();
-    private void OnMenuClose(object? sender, EventArgs e) => Close();
     private void OnMenuExtractAll(object? sender, EventArgs e) => _ = ExtractFullAsync();
     private void OnMenuSaveArtwork(object? sender, EventArgs e) => SaveArtwork();
     private void OnMenuExportMetadata(object? sender, EventArgs e) => ExportMetadata();

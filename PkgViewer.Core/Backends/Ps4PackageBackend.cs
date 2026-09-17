@@ -20,46 +20,33 @@ public sealed class Ps4PackageBackend : IPackageBackend
 internal sealed class Ps4PackageSession : IPackageSession
 {
     private readonly string _path;
+    private readonly string _passcode;
     private readonly PkgMetadata _metadata;
     private readonly PkgReader _reader;
-    private readonly List<PkgFileEntry> _fileEntries;
     private readonly List<string> _warnings = [];
+    private readonly object _gate = new();
+    private Task<IReadOnlyList<PackageFileRecord>>? _filesTask;
+    private Task<IReadOnlyList<PackageTrophy>>? _trophiesTask;
+    private volatile string _trophyMessage = string.Empty;
     private string? _tempDirectory;
     private bool _disposed;
 
     public Ps4PackageSession(string path, string? passcode)
     {
         _path = Path.GetFullPath(path);
+        _passcode = passcode ?? PkgReader.DefaultPasscode;
         _metadata = PkgMetadataReader.Read(_path);
-        _reader = new PkgReader(_path, passcode ?? PkgReader.DefaultPasscode);
+        _reader = new PkgReader(_path, _passcode);
 
-        try
-        {
-            _fileEntries = _reader.ListFiles();
-        }
-        catch (Exception ex) when (ex is InvalidDataException or IOException or NotSupportedException)
-        {
-            _fileEntries = [];
-            _warnings.Add($"File listing failed: {ex.Message}");
-        }
-
-        var files = new List<PackageFileRecord>(_fileEntries.Count);
-        long contentSize = 0;
-        foreach (PkgFileEntry entry in _fileEntries)
-        {
-            files.Add(new PackageFileRecord(Normalize(entry.Path), entry.IsDirectory, entry.Size));
-            if (!entry.IsDirectory) contentSize += entry.Size;
-        }
-
-        Files = files;
-        Info = BuildInfo(contentSize);
+        // The file listing and trophies are deferred to their lazy getters so the metadata summary
+        // appears without waiting for them (matching the PS5 session's behaviour).
+        Info = BuildInfo();
         Artwork = BuildArtwork();
         HeaderFields = BuildHeaderFields();
         Internals = HeaderFields;
         BuildInfoFields = BuildBuildInfoFields();
         SfoEntries = BuildSfoEntries();
         EntryRecords = BuildEntryRecords();
-        (Trophies, TrophyMessage) = Ps4TrophyReader.Read(_path, passcode);
 
         if (_metadata.PKGState != PkgBuildState.Fake)
             _warnings.Add("Official package: content protected by package keys may not be readable.");
@@ -67,27 +54,65 @@ internal sealed class Ps4PackageSession : IPackageSession
 
     public PackageInfo Info { get; }
     public PackageArtwork Artwork { get; }
-    public IReadOnlyList<PackageFileRecord> Files { get; }
     public IReadOnlyList<PackageInfoRow> Internals { get; }
     public IReadOnlyList<PackageInfoRow> HeaderFields { get; }
     public IReadOnlyList<PackageInfoRow> BuildInfoFields { get; }
     public IReadOnlyList<PackageSfoEntry> SfoEntries { get; }
     public IReadOnlyList<PackageEntryRecord> EntryRecords { get; }
-    public IReadOnlyList<PackageTrophy> Trophies { get; }
-    public string TrophyMessage { get; }
+    public string TrophyMessage => _trophyMessage;
     public IReadOnlyList<PackageDetailTab> DetailTabs => [];
     public IReadOnlyList<JsonTreeNode> ParameterJsonTree => [];
     public IReadOnlyList<string> Warnings => _warnings;
 
-    // PS4 listing/trophies are computed eagerly (cheap), so the lazy getters are already satisfied.
-    public Task<IReadOnlyList<PackageFileRecord>> GetFilesAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(Files);
+    // A failed/cancelled load is not cached, so revisiting a tab retries instead of replaying a failure.
+    public Task<IReadOnlyList<PackageFileRecord>> GetFilesAsync(CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            if (_filesTask is null || _filesTask.IsFaulted || _filesTask.IsCanceled)
+                _filesTask = Task.Run(LoadFiles, cancellationToken);
+            return _filesTask;
+        }
+    }
 
-    public Task<IReadOnlyList<PackageTrophy>> GetTrophiesAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(Trophies);
+    public Task<IReadOnlyList<PackageTrophy>> GetTrophiesAsync(CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            if (_trophiesTask is null || _trophiesTask.IsFaulted || _trophiesTask.IsCanceled)
+                _trophiesTask = Task.Run(LoadTrophies, cancellationToken);
+            return _trophiesTask;
+        }
+    }
 
     public Task<IReadOnlyList<PackageDetailTab>> GetDetailTabsAsync(CancellationToken cancellationToken) =>
         Task.FromResult(DetailTabs);
+
+    private IReadOnlyList<PackageFileRecord> LoadFiles()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        try
+        {
+            List<PkgFileEntry> entries = _reader.ListFiles();
+            var files = new List<PackageFileRecord>(entries.Count);
+            foreach (PkgFileEntry entry in entries)
+                files.Add(new PackageFileRecord(Normalize(entry.Path), entry.IsDirectory, entry.Size));
+            return files;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or NotSupportedException)
+        {
+            _warnings.Add($"File listing failed: {ex.Message}");
+            return [];
+        }
+    }
+
+    private IReadOnlyList<PackageTrophy> LoadTrophies()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        (IReadOnlyList<PackageTrophy> trophies, string message) = Ps4TrophyReader.Read(_path, _passcode);
+        _trophyMessage = message;
+        return trophies;
+    }
 
     public Stream OpenFile(string relativePath)
     {
@@ -127,54 +152,55 @@ internal sealed class Ps4PackageSession : IPackageSession
             return result;
         }, cancellationToken);
 
-    public Task<PackageExtractSummary> ExtractAllAsync(string destinationDirectory, PackageConflictPolicy conflictPolicy,
-        IProgress<PackageExtractProgress>? progress, CancellationToken cancellationToken) =>
-        Task.Run(() =>
+    public async Task<PackageExtractSummary> ExtractAllAsync(string destinationDirectory,
+        PackageConflictPolicy conflictPolicy, IProgress<PackageExtractProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        Directory.CreateDirectory(destinationDirectory);
+        IReadOnlyList<PackageFileRecord> all = await GetFilesAsync(cancellationToken).ConfigureAwait(false);
+        PackageFileRecord[] files = all.Where(file => !file.IsDirectory).ToArray();
+        int done = 0, extracted = 0, skipped = 0, failed = 0;
+        var errors = new List<string>();
+        foreach (PackageFileRecord file in files)
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            Directory.CreateDirectory(destinationDirectory);
-            PackageFileRecord[] files = Files.Where(file => !file.IsDirectory).ToArray();
-            int done = 0, extracted = 0, skipped = 0, failed = 0;
-            var errors = new List<string>();
-            foreach (PackageFileRecord file in files)
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Report(new PackageExtractProgress(done, files.Length, file.Path));
+            PackageExtractionResult result;
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                progress?.Report(new PackageExtractProgress(done, files.Length, file.Path));
-                PackageExtractionResult result;
-                try
-                {
-                    string destination = PackagePath.ResolveInside(destinationDirectory, file.Path);
-                    result = ExtractEntry(file.Path, destination, conflictPolicy, cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    result = new PackageExtractionResult(PackageExtractionOutcome.Failed, file.Path, ex.Message);
-                }
-
-                switch (result.Outcome)
-                {
-                    case PackageExtractionOutcome.Extracted:
-                    case PackageExtractionOutcome.Replaced:
-                    case PackageExtractionOutcome.KeptBoth:
-                        extracted++;
-                        break;
-                    case PackageExtractionOutcome.Skipped:
-                        skipped++;
-                        break;
-                    default:
-                        failed++;
-                        errors.Add($"{file.Path}: {result.Error}");
-                        break;
-                }
-                done++;
+                string destination = PackagePath.ResolveInside(destinationDirectory, file.Path);
+                result = ExtractEntry(file.Path, destination, conflictPolicy, cancellationToken);
             }
-            progress?.Report(new PackageExtractProgress(done, files.Length, string.Empty));
-            return new PackageExtractSummary(extracted, skipped, failed, errors);
-        }, cancellationToken);
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                result = new PackageExtractionResult(PackageExtractionOutcome.Failed, file.Path, ex.Message);
+            }
+
+            switch (result.Outcome)
+            {
+                case PackageExtractionOutcome.Extracted:
+                case PackageExtractionOutcome.Replaced:
+                case PackageExtractionOutcome.KeptBoth:
+                    extracted++;
+                    break;
+                case PackageExtractionOutcome.Skipped:
+                    skipped++;
+                    break;
+                default:
+                    failed++;
+                    errors.Add($"{file.Path}: {result.Error}");
+                    break;
+            }
+            done++;
+        }
+        progress?.Report(new PackageExtractProgress(done, files.Length, string.Empty));
+        return new PackageExtractSummary(extracted, skipped, failed, errors);
+    }
 
     /// <summary>Writes one entry to a temp file and moves it into place, honoring the conflict policy.</summary>
     private PackageExtractionResult ExtractEntry(string relativePath, string destinationPath,
@@ -254,7 +280,7 @@ internal sealed class Ps4PackageSession : IPackageSession
         }
     }
 
-    private PackageInfo BuildInfo(long contentSize)
+    private PackageInfo BuildInfo()
     {
         PkgInfo info = _reader.GetInfo();
         var extras = new List<PackageInfoRow>
@@ -282,8 +308,6 @@ internal sealed class Ps4PackageSession : IPackageSession
                 : _metadata.Region,
             BuildState = DescribeBuildState(_metadata.PKGState),
             RequiredFirmware = info.SystemVersion,
-            FileCount = Files.Count(file => !file.IsDirectory),
-            ContentSize = contentSize,
             ExtraRows = extras
         };
     }

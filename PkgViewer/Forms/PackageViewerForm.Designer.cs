@@ -62,9 +62,9 @@ partial class PackageViewerForm
 
     // Status
     private DarkStatusStrip _statusStrip = null!;
-    private ToolStripStatusLabel _statusPath = null!;
-    private ToolStripStatusLabel _statusState = null!;
-    private ToolStripStatusLabel _statusWarnings = null!;
+    private DarkToolStripStatusLabel _statusPath = null!;
+    private DarkToolStripStatusLabel _statusState = null!;
+    private DarkToolStripStatusLabel _statusWarnings = null!;
     private DarkToolStripSeparator _statusSeparator1 = null!;
     private DarkToolStripSeparator _statusSeparator2 = null!;
     private DarkToolStripProgressBar _progressBar = null!;
@@ -348,9 +348,9 @@ partial class PackageViewerForm
 
         // ---------------- Status ----------------
         _statusStrip = new DarkStatusStrip();
-        _statusPath = new ToolStripStatusLabel();
-        _statusState = new ToolStripStatusLabel();
-        _statusWarnings = new ToolStripStatusLabel();
+        _statusPath = new DarkToolStripStatusLabel();
+        _statusState = new DarkToolStripStatusLabel();
+        _statusWarnings = new DarkToolStripStatusLabel();
         _statusSeparator1 = new DarkToolStripSeparator();
         _statusSeparator2 = new DarkToolStripSeparator();
         _progressBar = new DarkToolStripProgressBar();
@@ -359,6 +359,8 @@ partial class PackageViewerForm
 
         _statusStrip.Font = new Font("Segoe UI", 8.25F);
         _statusStrip.Padding = new Padding(0, 4, 0, 4);
+        _statusStrip.Dock = DockStyle.Bottom;
+        _statusStrip.Height = 30;
         _statusPath.Spring = true;
         _statusPath.TextAlign = ContentAlignment.MiddleLeft;
         _statusPath.Text = string.Empty;

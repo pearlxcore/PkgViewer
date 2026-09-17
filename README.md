@@ -2,10 +2,6 @@
 
 A quick little viewer for PS4 and PS5 packages. Open a package or an image, poke around inside, preview files, and grab what you need - without opening the full PS4/PS5 PKG Tool.
 
-**This is not software for obtaining free PS4/PS5 games.**
-
-> **Experimental:** Pkg Viewer has been tested on PC only. It has not been tested on a jailbroken PS5, and reading packages can still fail on protected or unusual ones. Keep your originals.
-
 # Support My Work
 
 [![ko-fi](https://github.com/user-attachments/assets/be9cc4be-3352-4bd5-8086-05c30930f81d)](https://ko-fi.com/R6R524N7X)

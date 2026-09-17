@@ -44,7 +44,20 @@ internal sealed class OverviewSummaryView : DarkScrollView
         UpdateContentSize();
     }
 
-    private void UpdateContentSize() => ContentSize = new Size(ClientSize.Width, _rows.Count * RowHeight);
+    // Width 0 means "no horizontal scrolling"; height drives the vertical scroll bar.
+    private void UpdateContentSize() => ContentSize = new Size(0, _rows.Count * RowHeight);
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        UpdateContentSize();
+    }
+
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        if (Visible) UpdateContentSize();
+    }
 
     protected override void PaintContent(Graphics g)
     {
@@ -58,8 +71,9 @@ internal sealed class OverviewSummaryView : DarkScrollView
             (string caption, string value) = _rows[index];
             TextRenderer.DrawText(g, caption, _captionFont, new Point(LeftPad, y + (RowHeight - _captionFont.Height) / 2),
                 Colors.LightText, TextFormatFlags.NoPrefix);
+            // Viewport.Width already excludes the vertical scroll bar when it is visible.
             var valueBounds = new Rectangle(CaptionWidth, y,
-                Math.Max(0, ClientSize.Width - CaptionWidth - LeftPad - 2), RowHeight);
+                Math.Max(0, Viewport.Width - CaptionWidth - LeftPad - 2), RowHeight);
             TextRenderer.DrawText(g, value, _valueFont, valueBounds, Colors.LightText,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }

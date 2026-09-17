@@ -928,6 +928,10 @@ internal sealed partial class PackageViewerForm : DarkForm
             _previewImage.Visible = false;
             _previewText.Visible = true;
             _previewText.Text = result.Text ?? result.Message ?? string.Empty;
+            // Setting Text can leave the caret at the end and scroll the first line out of view.
+            _previewText.SelectionStart = 0;
+            _previewText.SelectionLength = 0;
+            _previewText.ScrollToCaret();
             _previewInfo.Text = result.Image is null && result.Text is not null
                 ? $"{Path.GetFileName(path)} ({FormatByteSize(size)}) - preview"
                 : path;
@@ -1554,6 +1558,19 @@ internal sealed partial class PackageViewerForm : DarkForm
     {
         if (e.Button == MouseButtons.Right && e.Node is not null)
             _fileTree.SelectedNode = e.Node;
+    }
+
+    /// <summary>Double-clicking a file in the tree previews it; a folder opens in place.</summary>
+    private void OnFileTreeNodeDoubleClick(object? sender, TreeNodeMouseClickEventArgs e)
+    {
+        if (e.Node?.Tag is not PackageFileNode model) return;
+        _fileTree.SelectedNode = e.Node;
+        if (model.IsDirectory)
+        {
+            e.Node.Expand();
+            return;
+        }
+        _ = PreviewFileAsync(model.FullPath, model.Size);
     }
 
     private void PreviewTreeNode()

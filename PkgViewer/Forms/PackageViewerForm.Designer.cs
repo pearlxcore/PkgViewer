@@ -796,6 +796,7 @@ partial class PackageViewerForm
         _fileTree.Dock = DockStyle.Fill;
         _fileTree.AfterSelect += OnFileTreeAfterSelect;
         _fileTree.NodeMouseClick += OnFileTreeNodeMouseClick;
+        _fileTree.NodeMouseDoubleClick += OnFileTreeNodeDoubleClick;
         _fileTree.ItemDrag += OnFilesItemDrag;
 
         _fileList.View = View.Details;

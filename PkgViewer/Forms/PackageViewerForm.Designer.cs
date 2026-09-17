@@ -368,6 +368,8 @@ partial class PackageViewerForm
         _statusWarnings.IsLink = true;
         _statusWarnings.Visible = false;
         _statusWarnings.Click += OnStatusWarningsClick;
+        _statusSeparator1.Visible = false;
+        _statusSeparator2.Visible = false;
         _progressBar.Visible = false;
         _progressBar.Style = ProgressBarStyle.Continuous;
         _stopExtractButton.Text = "Stop Extract";

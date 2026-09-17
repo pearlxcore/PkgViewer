@@ -1281,6 +1281,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         _stopExtractButton.Visible = true;
         _stopExtractButton.Enabled = true;
         _tabs.Enabled = false;
+        UpdateStatusSeparators();
         UpdateFileActionState();
     }
 
@@ -1296,6 +1297,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         _tabs.Enabled = true;
         _busy = false;
         _statusState.Text = "Ready";
+        UpdateStatusSeparators();
         UpdateFileActionState();
     }
 
@@ -1917,6 +1919,17 @@ internal sealed partial class PackageViewerForm : DarkForm
         _tabs.Enabled = !loading;
         _statusPath.Text = _currentPackagePath;
         _statusState.Text = state;
+        UpdateStatusSeparators();
+    }
+
+    /// <summary>
+    /// The two status separators only make sense next to the progress bar / stop button, so they are
+    /// hidden while those controls are hidden (previously they showed as a stray "||" when idle).
+    /// </summary>
+    private void UpdateStatusSeparators()
+    {
+        _statusSeparator1.Visible = _progressBar.Visible;
+        _statusSeparator2.Visible = _stopExtractButton.Visible;
     }
 
     private void OnFormClosing(object? sender, FormClosingEventArgs e)

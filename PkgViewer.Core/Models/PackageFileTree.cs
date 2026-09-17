@@ -26,8 +26,8 @@ public static class PackageFileTree
 
         foreach (PackageFileRecord record in files)
         {
-            string path = record.Path.Replace('\\', '/').Trim('/');
-            if (path.Length == 0) continue;
+            // Skip rooted/traversal/reserved entries rather than building an unsafe tree.
+            if (!PackagePath.TryNormalize(record.Path, out string path, out _)) continue;
 
             string[] parts = path.Split('/');
             string current = string.Empty;

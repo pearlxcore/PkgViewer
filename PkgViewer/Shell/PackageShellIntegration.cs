@@ -36,8 +36,8 @@ internal static class PackageShellIntegration
 
     public static void Install()
     {
-        RemoveLegacyAssociations();
-
+        // Registration only ever adds PkgViewer; removing other tools' handlers is a separate,
+        // explicit action (RemoveLegacyAssociations) so installing this viewer never breaks them.
         string executable = ResolveExecutable();
         using RegistryKey classes = Registry.CurrentUser.CreateSubKey(@"Software\Classes");
 
@@ -155,12 +155,16 @@ internal static class PackageShellIntegration
                     using RegistryKey? key = classes.OpenSubKey(extension, writable: true);
                     if (key is null) continue;
 
-                    // A default ProgId whose handler key is gone must be cleared, otherwise Explorer
-                    // keeps resolving the (now dangling) icon.
-                    if (key.GetValue(null) is string progId && progId.Length > 0 && !ProgIdExists(progId))
-                        key.SetValue(null, string.Empty);
-
-                    key.DeleteSubKeyTree("DefaultIcon", throwOnMissingSubKey: false);
+                    string defaultProgId = key.GetValue(null) as string ?? string.Empty;
+                    bool ours = string.Equals(defaultProgId, ProgId, StringComparison.OrdinalIgnoreCase);
+                    bool dangling = defaultProgId.Length > 0 && !ProgIdExists(defaultProgId);
+                    // Only touch the extension icon when it belongs to us or points at a removed
+                    // handler; another app's icon is left alone.
+                    if (ours || dangling)
+                    {
+                        if (dangling) key.SetValue(null, string.Empty);
+                        key.DeleteSubKeyTree("DefaultIcon", throwOnMissingSubKey: false);
+                    }
                 }
             }
 
@@ -198,10 +202,18 @@ internal static class PackageShellIntegration
         }
     }
 
+    /// <summary>
+    /// Resolves a ProgId against the effective merged classes view (per-user first, then machine
+    /// wide) so a machine-registered handler is not mistaken for a missing one.
+    /// </summary>
     private static bool ProgIdExists(string progId)
     {
-        using RegistryKey? key = Registry.CurrentUser.OpenSubKey(@"Software\Classes\" + progId);
-        return key is not null;
+        using (RegistryKey? perUser = Registry.CurrentUser.OpenSubKey(@"Software\Classes\" + progId))
+        {
+            if (perUser is not null) return true;
+        }
+        using RegistryKey? machine = Registry.LocalMachine.OpenSubKey(@"Software\Classes\" + progId);
+        return machine is not null;
     }
 
     /// <summary>Opens the Windows Default apps page; the user picks PkgViewer there.</summary>

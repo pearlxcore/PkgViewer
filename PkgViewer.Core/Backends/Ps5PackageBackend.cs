@@ -153,22 +153,36 @@ internal sealed class Ps5PackageSession : IPackageSession
     public string TrophyMessage => _trophyMessage;
     public IReadOnlyList<string> Warnings => _warnings;
 
+    // A failed or cancelled load is not cached: the next visit retries with a fresh task instead of
+    // replaying the same failure.
     public Task<IReadOnlyList<PackageFileRecord>> GetFilesAsync(CancellationToken cancellationToken)
     {
         lock (_gate)
-            return _filesTask ??= Task.Run(LoadFiles, cancellationToken);
+        {
+            if (_filesTask is null || _filesTask.IsFaulted || _filesTask.IsCanceled)
+                _filesTask = Task.Run(LoadFiles, cancellationToken);
+            return _filesTask;
+        }
     }
 
     public Task<IReadOnlyList<PackageTrophy>> GetTrophiesAsync(CancellationToken cancellationToken)
     {
         lock (_gate)
-            return _trophiesTask ??= Task.Run(LoadTrophies, cancellationToken);
+        {
+            if (_trophiesTask is null || _trophiesTask.IsFaulted || _trophiesTask.IsCanceled)
+                _trophiesTask = Task.Run(LoadTrophies, cancellationToken);
+            return _trophiesTask;
+        }
     }
 
     public Task<IReadOnlyList<PackageDetailTab>> GetDetailTabsAsync(CancellationToken cancellationToken)
     {
         lock (_gate)
-            return _detailTabsTask ??= Task.Run(() => LoadDetailTabs(cancellationToken), cancellationToken);
+        {
+            if (_detailTabsTask is null || _detailTabsTask.IsFaulted || _detailTabsTask.IsCanceled)
+                _detailTabsTask = Task.Run(() => LoadDetailTabs(cancellationToken), cancellationToken);
+            return _detailTabsTask;
+        }
     }
 
     public Stream OpenFile(string relativePath)
@@ -182,43 +196,145 @@ internal sealed class Ps5PackageSession : IPackageSession
         IProgress<long>? progress, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        string normalized = GameFileSystem.NormalizePath(relativePath);
-        IReadOnlyGameFileSystem files = EnsureFileSystem();
-        await using Stream input = files.OpenRead(normalized);
-        string? parent = Path.GetDirectoryName(destinationPath);
-        if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
-        await using var output = new FileStream(destinationPath, FileMode.Create, FileAccess.Write,
-            FileShare.None, 1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
-        byte[] buffer = new byte[1024 * 1024];
-        long copied = 0;
-        while (true)
-        {
-            int read = await input.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-            if (read == 0) break;
-            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-            copied += read;
-            progress?.Report(copied);
-        }
+        if (!PackagePath.TryNormalize(relativePath, out _, out string? reason))
+            throw new IOException($"The package entry path is not safe to extract ({reason}).");
+        await ExtractEntryAsync(relativePath, destinationPath, PackageConflictPolicy.Replace, progress, cancellationToken)
+            .ConfigureAwait(false);
     }
 
-    public async Task ExtractAllAsync(string destinationDirectory,
-        IProgress<PackageExtractProgress>? progress, CancellationToken cancellationToken)
+    public Task<PackageExtractionResult> ExtractAsync(PackageExtractionRequest request,
+        IProgress<long>? progress, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        string destination = PackagePath.ResolveInside(request.DestinationRoot, request.PackageRelativePath);
+        return ExtractEntryAsync(request.PackageRelativePath, destination, request.ConflictPolicy, progress, cancellationToken);
+    }
+
+    public async Task<PackageExtractSummary> ExtractAllAsync(string destinationDirectory,
+        PackageConflictPolicy conflictPolicy, IProgress<PackageExtractProgress>? progress, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         Directory.CreateDirectory(destinationDirectory);
         IReadOnlyList<PackageFileRecord> all = await GetFilesAsync(cancellationToken).ConfigureAwait(false);
         PackageFileRecord[] files = all.Where(file => !file.IsDirectory).ToArray();
-        int done = 0;
+        int done = 0, extracted = 0, skipped = 0, failed = 0;
+        var errors = new List<string>();
         foreach (PackageFileRecord file in files)
         {
             cancellationToken.ThrowIfCancellationRequested();
             progress?.Report(new PackageExtractProgress(done, files.Length, file.Path));
-            string destination = Path.Combine(destinationDirectory,
-                file.Path.Replace('/', Path.DirectorySeparatorChar));
-            await ExtractFileAsync(file.Path, destination, null, cancellationToken).ConfigureAwait(false);
+            PackageExtractionResult result;
+            try
+            {
+                string destination = PackagePath.ResolveInside(destinationDirectory, file.Path);
+                result = await ExtractEntryAsync(file.Path, destination, conflictPolicy, null, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                result = new PackageExtractionResult(PackageExtractionOutcome.Failed, file.Path, ex.Message);
+            }
+
+            switch (result.Outcome)
+            {
+                case PackageExtractionOutcome.Extracted:
+                case PackageExtractionOutcome.Replaced:
+                case PackageExtractionOutcome.KeptBoth:
+                    extracted++;
+                    break;
+                case PackageExtractionOutcome.Skipped:
+                    skipped++;
+                    break;
+                default:
+                    failed++;
+                    errors.Add($"{file.Path}: {result.Error}");
+                    break;
+            }
             done++;
         }
         progress?.Report(new PackageExtractProgress(done, files.Length, string.Empty));
+        return new PackageExtractSummary(extracted, skipped, failed, errors);
+    }
+
+    /// <summary>
+    /// Writes one entry to a temporary file and only then moves it into place, so a cancelled or
+    /// failed extraction never leaves a truncated replacement. The relative path is normalized and
+    /// the destination is already contained by the caller.
+    /// </summary>
+    private async Task<PackageExtractionResult> ExtractEntryAsync(string relativePath, string destinationPath,
+        PackageConflictPolicy policy, IProgress<long>? progress, CancellationToken cancellationToken)
+    {
+        if (!PackagePath.TryNormalize(relativePath, out string normalized, out string? reason))
+            return new PackageExtractionResult(PackageExtractionOutcome.Failed, destinationPath, $"unsafe path ({reason})");
+
+        bool existed = File.Exists(destinationPath) || Directory.Exists(destinationPath);
+        string target = destinationPath;
+        PackageExtractionOutcome outcome;
+        switch (policy)
+        {
+            case PackageConflictPolicy.Fail when existed:
+                return new PackageExtractionResult(PackageExtractionOutcome.Failed, destinationPath, "the destination already exists");
+            case PackageConflictPolicy.Skip when existed:
+                return new PackageExtractionResult(PackageExtractionOutcome.Skipped, destinationPath);
+            case PackageConflictPolicy.KeepBoth when existed:
+                target = PackagePath.MakeUnique(destinationPath);
+                outcome = PackageExtractionOutcome.KeptBoth;
+                break;
+            default:
+                outcome = existed ? PackageExtractionOutcome.Replaced : PackageExtractionOutcome.Extracted;
+                break;
+        }
+
+        try
+        {
+            IReadOnlyGameFileSystem files = EnsureFileSystem();
+            await using Stream input = files.OpenRead(normalized);
+            string? parent = Path.GetDirectoryName(target);
+            if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+            string temp = target + ".partial-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                await using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write,
+                    FileShare.None, 1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
+                {
+                    byte[] buffer = new byte[1024 * 1024];
+                    long copied = 0;
+                    while (true)
+                    {
+                        int read = await input.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+                        if (read == 0) break;
+                        await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                        copied += read;
+                        progress?.Report(copied);
+                    }
+                }
+                File.Move(temp, target, overwrite: true);
+            }
+            catch
+            {
+                TryDeleteFile(temp);
+                throw;
+            }
+            return new PackageExtractionResult(outcome, target);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return new PackageExtractionResult(PackageExtractionOutcome.Failed, target, ex.Message);
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try { File.Delete(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     public void Dispose()

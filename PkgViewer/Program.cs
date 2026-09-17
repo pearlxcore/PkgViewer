@@ -63,22 +63,38 @@ internal static class Program
             return;
         }
 
+        if (args.Length > 0 && args[0] == "--smoke")
+        {
+            // Headless construction check for the viewer form (no package is opened).
+            try
+            {
+                using var form = new PackageViewerForm(Path.Combine(Path.GetTempPath(), "pkgviewer-smoke.pkg"));
+                form.CreateControl();
+                Logger.Info("Smoke: OK");
+                Environment.ExitCode = 0;
+            }
+            catch (Exception ex)
+            {
+                Logger.Exception("Smoke", ex);
+                Environment.ExitCode = 1;
+            }
+            return;
+        }
+
         string? path = ResolvePackagePath(args);
         if (path is null)
         {
-            // First-run (bare launch only): offer to register the file-type integration once.
+            // First-run (bare launch only): offer to register the file-type integration once. Either
+            // choice is remembered, and the app continues to the file picker either way.
             AppSettings settings = AppSettings.Load();
-            if (args.Length == 0 && !settings.IntegrationPromptShown && !PackageShellIntegration.IsInstalled())
+            if (args.Length == 0 && !settings.IntegrationPromptShown && !settings.IntegrationPromptDeclined &&
+                !PackageShellIntegration.IsInstalled())
             {
                 using var prompt = new IntegrationPromptForm();
                 prompt.ShowDialog();
-                if (prompt.Integrated)
-                {
-                    settings.IntegrationPromptShown = true;
-                    settings.Save();
-                    return; // integrated: the user can double-click packages from now on
-                }
-                // "Not now": fall through to the file picker and ask again next launch.
+                if (prompt.Integrated) settings.IntegrationPromptShown = true;
+                if (prompt.Declined) settings.IntegrationPromptDeclined = true;
+                if (prompt.Integrated || prompt.Declined) settings.Save();
             }
 
             using var dialog = new OpenFileDialog

@@ -45,10 +45,19 @@ public interface IPackageSession : IDisposable
     /// <summary>Opens one package file for reading. The caller owns the returned stream.</summary>
     Stream OpenFile(string relativePath);
 
+    /// <summary>Extracts one entry to an explicit path (atomically), validating the relative path.</summary>
     Task ExtractFileAsync(string relativePath, string destinationPath,
         IProgress<long>? progress, CancellationToken cancellationToken);
 
-    Task ExtractAllAsync(string destinationDirectory,
+    /// <summary>
+    /// Extracts one entry beneath a destination root with a conflict policy, applying the package
+    /// containment check to the final path.
+    /// </summary>
+    Task<PackageExtractionResult> ExtractAsync(PackageExtractionRequest request,
+        IProgress<long>? progress, CancellationToken cancellationToken);
+
+    /// <summary>Extracts every file, returning counts and per-file failures instead of throwing.</summary>
+    Task<PackageExtractSummary> ExtractAllAsync(string destinationDirectory, PackageConflictPolicy conflictPolicy,
         IProgress<PackageExtractProgress>? progress, CancellationToken cancellationToken);
 }
 

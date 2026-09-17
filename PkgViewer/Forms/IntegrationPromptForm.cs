@@ -15,6 +15,7 @@ internal sealed class IntegrationPromptForm : DarkForm
     private readonly DarkButton _primary = new();
     private readonly DarkButton _decline = new();
     private bool _integrated;
+    private bool _declined;
 
     public IntegrationPromptForm()
     {
@@ -41,7 +42,7 @@ internal sealed class IntegrationPromptForm : DarkForm
         _decline.Text = "Not now";
         _decline.Location = new Point(342, 146);
         _decline.Size = new Size(120, 32);
-        _decline.Click += (_, _) => Close();
+        _decline.Click += (_, _) => { _declined = true; Close(); };
 
         AcceptButton = _primary;
         CancelButton = _decline;
@@ -51,6 +52,9 @@ internal sealed class IntegrationPromptForm : DarkForm
 
     /// <summary>True when the user completed the integration.</summary>
     public bool Integrated => _integrated;
+
+    /// <summary>True when the user chose "Not now" without integrating.</summary>
+    public bool Declined => _declined;
 
     private void OnPrimaryClick(object? sender, EventArgs e)
     {

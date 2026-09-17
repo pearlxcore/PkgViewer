@@ -23,14 +23,21 @@ partial class PackageViewerForm
     private readonly DarkStatusStrip _statusStrip = new();
     private readonly ToolStripStatusLabel _statusPath = new() { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
     private readonly ToolStripStatusLabel _statusState = new();
+    private readonly ToolStripStatusLabel _statusWarnings = new() { IsLink = true, Visible = false };
     private readonly DarkToolStripProgressBar _progressBar = new() { Visible = false, Style = ProgressBarStyle.Continuous };
     private readonly DarkToolStripButton _stopExtractButton = new("Stop Extract") { Visible = false };
+
+    // Menu items whose enabled/checked state is updated from the session.
+    private ToolStripMenuItem? _extractAllMenuItem;
+    private ToolStripMenuItem? _retryAccessMenuItem;
+    private ToolStripMenuItem? _previewPaneMenuItem;
+    private ToolStripMenuItem? _exportMetadataMenuItem;
 
     // Tabs
     private readonly DarkTabControl _tabs = new();
     private readonly DarkTabPage _overviewTab = new() { Text = "Overview", Padding = new Padding(12) };
     private readonly DarkTabPage _packageTab = new() { Text = "PKG Internals", Padding = new Padding(12) };
-    private readonly DarkTabPage _trophyTab = new() { Text = "Trophy", Padding = new Padding(12) };
+    private readonly DarkTabPage _trophyTab = new() { Text = "Trophies", Padding = new Padding(12) };
     private readonly DarkTabPage _filesTab = new() { Text = "File Browser", Padding = new Padding(12) };
     private readonly DarkTabPage _artworkTab = new() { Text = "Artwork", Padding = new Padding(12) };
 
@@ -62,6 +69,11 @@ partial class PackageViewerForm
     private readonly DarkListView _fileList = new();
     private readonly ImageList _fileIcons = FileIcons.Create();
     private readonly DarkContextMenu _fileContextMenu = new();
+    private readonly DarkLabel _fileBreadcrumb = new() { Text = "Package root" };
+    private readonly DarkButton _upButton = new() { Text = "Up" };
+    private readonly DarkButton _extractSelectedButton = new() { Text = "Extract Selected..." };
+    private readonly DarkButton _extractAllButton = new() { Text = "Extract All..." };
+    private DarkSplitContainer? _filesSplit;
     private readonly DarkSectionPanel _previewPanel = new() { SectionHeader = "File Preview" };
     private readonly DarkLabel _previewInfo = new() { Text = "Double-click a file to preview it." };
     private readonly Panel _previewBody = new() { BackColor = Color.FromArgb(20, 20, 20), Padding = new Padding(1) };
@@ -100,10 +112,11 @@ partial class PackageViewerForm
     private void InitializeComponent()
     {
         Text = "PkgViewer";
-        FormBorderStyle = FormBorderStyle.FixedSingle;
-        MaximizeBox = false;
-        MinimumSize = new Size(800, 580);
-        ClientSize = new Size(1004, 600);
+        FormBorderStyle = FormBorderStyle.Sizable;
+        MaximizeBox = true;
+        MinimizeBox = true;
+        MinimumSize = new Size(860, 560);
+        ClientSize = new Size(1100, 680);
         StartPosition = FormStartPosition.CenterScreen;
 
         BuildMenu();
@@ -136,40 +149,71 @@ partial class PackageViewerForm
         _menu.Font = new Font("Segoe UI", 9F);
 
         var fileMenu = new ToolStripMenuItem("File");
-        var copyMenu = new ToolStripMenuItem("Copy");
-        copyMenu.DropDownItems.Add(MenuItem("TITLE_ID", () => CopyInfo("title_id")));
-        copyMenu.DropDownItems.Add(MenuItem("CONTENT_ID", () => CopyInfo("content_id")));
-        copyMenu.DropDownItems.Add(MenuItem("TITLE", () => CopyInfo("title")));
-        fileMenu.DropDownItems.Add(copyMenu);
+        fileMenu.DropDownItems.Add(MenuItem("Open...", OpenAnotherPackage, Keys.Control | Keys.O));
+        fileMenu.DropDownItems.Add(MenuItem("Close", Close));
         fileMenu.DropDownItems.Add(new DarkToolStripSeparator());
+        _extractAllMenuItem = MenuItem("Extract All...", () => _ = ExtractFullAsync(), Keys.Control | Keys.Shift | Keys.E);
+        fileMenu.DropDownItems.Add(_extractAllMenuItem);
+        fileMenu.DropDownItems.Add(MenuItem("Save Artwork...", SaveArtwork));
+        _exportMetadataMenuItem = MenuItem("Export Metadata...", ExportMetadata);
+        fileMenu.DropDownItems.Add(_exportMetadataMenuItem);
+        fileMenu.DropDownItems.Add(new DarkToolStripSeparator());
+        fileMenu.DropDownItems.Add(MenuItem("Open Source Folder", OpenSourceFolder));
         fileMenu.DropDownItems.Add(MenuItem("Exit", Close));
 
-        var toolsMenu = new ToolStripMenuItem("Tools");
-        toolsMenu.DropDownItems.Add(MenuItem("Save Artwork", SaveArtwork));
-        toolsMenu.DropDownItems.Add(new DarkToolStripSeparator());
+        var editMenu = new ToolStripMenuItem("Edit");
+        editMenu.DropDownItems.Add(MenuItem("Copy Title", () => CopyInfo("title")));
+        editMenu.DropDownItems.Add(MenuItem("Copy Title ID", () => CopyInfo("title_id")));
+        editMenu.DropDownItems.Add(MenuItem("Copy Content ID", () => CopyInfo("content_id")));
+        editMenu.DropDownItems.Add(MenuItem("Copy Source Path", CopySourcePath));
+        editMenu.DropDownItems.Add(new DarkToolStripSeparator());
+        editMenu.DropDownItems.Add(MenuItem("Find Files", FocusFileSearch, Keys.Control | Keys.F));
 
-        var integrationMenu = new ToolStripMenuItem("Integration");
-        integrationMenu.DropDownItems.Add(MenuItem("Add integration", AddIntegration));
-        integrationMenu.DropDownItems.Add(MenuItem("Remove integration", RemoveIntegration));
-        integrationMenu.DropDownItems.Add(new DarkToolStripSeparator());
-        integrationMenu.DropDownItems.Add(MenuItem("Remove legacy PS4 PKG Viewer", RemoveLegacyIntegration));
-        toolsMenu.DropDownItems.Add(integrationMenu);
+        var viewMenu = new ToolStripMenuItem("View");
+        viewMenu.DropDownItems.Add(MenuItem("Overview", () => SelectTab(_overviewTab)));
+        viewMenu.DropDownItems.Add(MenuItem("Files", () => SelectTab(_filesTab)));
+        viewMenu.DropDownItems.Add(MenuItem("Artwork", () => SelectTab(_artworkTab)));
+        viewMenu.DropDownItems.Add(MenuItem("Trophies", () => SelectTab(_trophyTab)));
+        viewMenu.DropDownItems.Add(MenuItem("Internals", () => SelectTab(_packageTab)));
+        viewMenu.DropDownItems.Add(new DarkToolStripSeparator());
+        _previewPaneMenuItem = MenuItem("Preview Pane", TogglePreviewPane);
+        _previewPaneMenuItem.CheckOnClick = true;
+        _previewPaneMenuItem.Checked = true;
+        viewMenu.DropDownItems.Add(_previewPaneMenuItem);
+        viewMenu.DropDownItems.Add(MenuItem("Reset Layout", ResetLayout));
+
+        var toolsMenu = new ToolStripMenuItem("Tools");
+        _retryAccessMenuItem = MenuItem("Retry Content Access...", () => _ = RetryContentAccessAsync());
+        toolsMenu.DropDownItems.Add(_retryAccessMenuItem);
+        toolsMenu.DropDownItems.Add(new DarkToolStripSeparator());
+        toolsMenu.DropDownItems.Add(MenuItem("File Associations...", ShowAssociations));
+        var advancedMenu = new ToolStripMenuItem("Advanced");
+        advancedMenu.DropDownItems.Add(MenuItem("Remove legacy PS4/PS5 associations...", RemoveLegacyIntegration));
+        toolsMenu.DropDownItems.Add(advancedMenu);
 
         var helpMenu = new ToolStripMenuItem("Help");
+        helpMenu.DropDownItems.Add(MenuItem("Open Log Folder", OpenLogFolder));
+        helpMenu.DropDownItems.Add(MenuItem("Copy Diagnostic Summary", CopyDiagnostics));
+        helpMenu.DropDownItems.Add(new DarkToolStripSeparator());
         helpMenu.DropDownItems.Add(MenuItem("About", () => new AboutForm().ShowDialog(this)));
-        helpMenu.DropDownItems.Add(MenuItem("Buy me a coffee", OpenCoffeeLink));
-        helpMenu.DropDownItems.Add(MenuItem("Check for update", () => DarkMessageBox.ShowInformation(
-            "Update checking is not available in this build.", "PkgViewer")));
+        helpMenu.DropDownItems.Add(MenuItem("Support development", OpenCoffeeLink));
 
         _menu.Items.Add(fileMenu);
+        _menu.Items.Add(editMenu);
+        _menu.Items.Add(viewMenu);
         _menu.Items.Add(toolsMenu);
         _menu.Items.Add(helpMenu);
         MainMenuStrip = _menu;
     }
 
-    private static ToolStripMenuItem MenuItem(string text, Action action)
+    private static ToolStripMenuItem MenuItem(string text, Action action, Keys shortcut = Keys.None)
     {
         var item = new ToolStripMenuItem(text) { ForeColor = Color.FromArgb(220, 220, 220) };
+        if (shortcut != Keys.None)
+        {
+            item.ShortcutKeys = shortcut;
+            item.ShowShortcutKeys = true;
+        }
         item.Click += (_, _) => action();
         return item;
     }
@@ -210,12 +254,14 @@ partial class PackageViewerForm
     private void BuildStatus()
     {
         _statusStrip.Font = new Font("Segoe UI", 8.25F);
-        _statusPath.Text = _packagePath;
+        _statusPath.Text = _currentPackagePath;
         _statusState.Text = "Starting...";
         _stopExtractButton.Click += (_, _) => StopExtraction();
 
+        _statusWarnings.Click += (_, _) => ShowWarnings();
         _statusStrip.Items.Add(_statusPath);
         _statusStrip.Items.Add(_statusState);
+        _statusStrip.Items.Add(_statusWarnings);
         _statusStrip.Items.Add(new DarkToolStripSeparator());
         _statusStrip.Items.Add(_progressBar);
         _statusStrip.Items.Add(new DarkToolStripSeparator());
@@ -394,17 +440,19 @@ partial class PackageViewerForm
         _fileTree.ShowLines = true;
         _fileTree.ShowPlusMinus = true;
         _fileTree.ShowRootLines = true;
-        _fileTree.AfterSelect += (_, _) => RefreshFileList();
+        _fileTree.AfterSelect += (_, _) => OnFileTreeNodeSelected();
 
         _fileList.View = View.Details;
         _fileList.FullRowSelect = true;
-        _fileList.MultiSelect = false;
-        _fileList.Columns.Add("Name", 143);
-        _fileList.Columns.Add("Type", 143);
-        _fileList.Columns.Add("Path", 143);
-        _fileList.Columns.Add("Size", 143);
+        _fileList.MultiSelect = true;
+        _fileList.Columns.Add("Name", 220);
+        _fileList.Columns.Add("Type", 100);
+        _fileList.Columns.Add("Path", 260);
+        _fileList.Columns.Add("Size", 90);
         _fileList.ItemActivate += (_, _) => ActivateFileListItem();
         _fileList.MouseClick += OnFileListMouseClick;
+        _fileList.SelectedIndexChanged += (_, _) => UpdateFileActionState();
+        _fileList.KeyDown += OnFileListKeyDown;
 
         _fileTree.ImageList = _fileIcons;
         _fileList.SmallImageList = _fileIcons;
@@ -425,25 +473,51 @@ partial class PackageViewerForm
         _previewInfo.BringToFront();
 
         // Draggable three-pane split: folder tree | content list | file preview.
-        var split = new DarkSplitContainer
+        _filesSplit = new DarkSplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = DarkSplitContainer.DarkSplitOrientation.Vertical,
             SplitterWidth = 6
         };
-        split.AddPanel(_fileTree);
-        split.AddPanel(_fileList);
-        split.AddPanel(_previewPanel);
-        split.PanelSizes = [260, 340, 340];
+        _filesSplit.AddPanel(_fileTree);
+        _filesSplit.AddPanel(_fileList);
+        _filesSplit.AddPanel(_previewPanel);
+        _filesSplit.PanelSizes = [280, 420, 380];
+
+        _fileBreadcrumb.Dock = DockStyle.Fill;
+        _fileBreadcrumb.AutoEllipsis = true;
+        _fileBreadcrumb.TextAlign = ContentAlignment.MiddleLeft;
+        _fileBreadcrumb.Padding = new Padding(6, 0, 6, 0);
+        _upButton.Dock = DockStyle.Fill;
+        _extractSelectedButton.Dock = DockStyle.Fill;
+        _extractAllButton.Dock = DockStyle.Fill;
+        _upButton.Margin = new Padding(2);
+        _extractSelectedButton.Margin = new Padding(2);
+        _extractAllButton.Margin = new Padding(2);
+        _upButton.Click += (_, _) => NavigateUp();
+        _extractSelectedButton.Click += (_, _) => _ = ExtractSelectedAsync();
+        _extractAllButton.Click += (_, _) => _ = ExtractFullAsync();
+
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = new Padding(0) };
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 56F));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 156F));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130F));
+        toolbar.Controls.Add(_fileBreadcrumb, 0, 0);
+        toolbar.Controls.Add(_upButton, 1, 0);
+        toolbar.Controls.Add(_extractSelectedButton, 2, 0);
+        toolbar.Controls.Add(_extractAllButton, 3, 0);
 
         _fileFilter.Dock = DockStyle.Fill;
         _fileFilter.SearchTextChanged += (_, _) => RefreshFileList();
 
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        layout.Controls.Add(_fileFilter, 0, 0);
-        layout.Controls.Add(split, 0, 1);
+        layout.Controls.Add(toolbar, 0, 0);
+        layout.Controls.Add(_fileFilter, 0, 1);
+        layout.Controls.Add(_filesSplit, 0, 2);
         _filesTab.Controls.Add(layout);
     }
 
@@ -540,11 +614,11 @@ partial class PackageViewerForm
 
     private void BuildFileContextMenu()
     {
-        _fileContextMenu.Items.Add(MenuItem("Extract selected item",
-            () => _ = ExtractSelectedAsync(preserveStructure: false)));
-        _fileContextMenu.Items.Add(MenuItem("Extract selected (with folder structure)",
-            () => _ = ExtractSelectedAsync(preserveStructure: true)));
+        _fileContextMenu.Items.Add(MenuItem("Preview", ActivateFileListItem));
         _fileContextMenu.Items.Add(new DarkToolStripSeparator());
+        _fileContextMenu.Items.Add(MenuItem("Extract...", () => _ = ExtractSelectedAsync()));
+        _fileContextMenu.Items.Add(new DarkToolStripSeparator());
+        _fileContextMenu.Items.Add(MenuItem("Open containing folder", OpenContainingFolder));
         _fileContextMenu.Items.Add(MenuItem("Copy path", CopySelectedPath));
         _fileContextMenu.Items.Add(MenuItem("Copy filename", CopySelectedName));
     }

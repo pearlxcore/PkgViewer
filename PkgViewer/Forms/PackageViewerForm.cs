@@ -26,7 +26,7 @@ internal sealed partial class PackageViewerForm : DarkForm
     private const int MaximumHexBytes = 16 * 1024;
     private const int MaximumFileItems = 20000;
 
-    private readonly string _packagePath;
+    private readonly AppSettings _settings = AppSettings.Load();
     private readonly PackageOpenService _openService = new();
     private string _currentPackagePath;
 
@@ -34,6 +34,7 @@ internal sealed partial class PackageViewerForm : DarkForm
     private string? _passcode;
     private IReadOnlyList<PackageFileRecord> _allFiles = [];
     private int _fileMatchCount;
+    private bool _fileLimitHit;
     private bool _busy;
     private bool _shown;
     private bool _filesLoaded;
@@ -41,16 +42,34 @@ internal sealed partial class PackageViewerForm : DarkForm
     private bool _detailTabsLoaded;
     private int _shownWarningCount;
     private CancellationTokenSource? _extractCancellation;
+    private CancellationTokenSource? _previewCancellation;
+    private CancellationTokenSource _lifetimeCancellation = new();
+    private int _previewVersion;
+    private bool _closing;
+    private TreeNode? _fileRootNode;
+    private string _lastExtractionDirectory;
     private readonly List<Image> _trophyImages = [];
     private readonly List<DarkTabPage> _detailTabPages = [];
 
     public PackageViewerForm(string packagePath)
     {
-        _packagePath = Path.GetFullPath(packagePath);
-        _currentPackagePath = _packagePath;
+        _currentPackagePath = Path.GetFullPath(packagePath);
+        _lastExtractionDirectory = _settings.LastExtractionDirectory;
         AppIcon.Apply(this);
+        ApplyWindowBounds();
 
         InitializeComponent();
+
+        if (_previewPaneMenuItem is not null) _previewPaneMenuItem.Checked = _settings.PreviewPaneVisible;
+        SetPreviewPaneVisible(_settings.PreviewPaneVisible);
+        RestoreFileLayout();
+    }
+
+    private void ApplyWindowBounds()
+    {
+        if (_settings.WindowWidth >= 800 && _settings.WindowHeight >= 560)
+            ClientSize = new Size(_settings.WindowWidth, _settings.WindowHeight);
+        if (_settings.WindowMaximized) WindowState = FormWindowState.Maximized;
     }
 
     private async Task OnTabSelectedAsync()
@@ -143,8 +162,15 @@ internal sealed partial class PackageViewerForm : DarkForm
         _trophiesLoaded = false;
         _fileTree.Nodes.Clear();
         _fileList.Items.Clear();
+        _fileRootNode = null;
+        _fileBreadcrumb.Text = "Package root";
         ResetTrophyState();
-        _shownWarningCount = _session.Warnings.Count;
+
+        // Surface warnings that already exist at open (protected/unreadable content) instead of only
+        // counting them; otherwise such a package looks like an empty file list.
+        _shownWarningCount = 0;
+        AppendNewWarnings();
+        UpdateMenuStates();
 
         ApplyPlatformLayout(info.Platform);
     }
@@ -156,9 +182,29 @@ internal sealed partial class PackageViewerForm : DarkForm
         int count = _session.Warnings.Count;
         for (int index = _shownWarningCount; index < count; index++)
             Logger.Info("Warning: " + _session.Warnings[index]);
-        if (count > _shownWarningCount)
-            _statusState.Text = $"Ready ({count} warning(s)).";
         _shownWarningCount = count;
+        UpdateWarningIndicator();
+    }
+
+    private void UpdateWarningIndicator()
+    {
+        int count = _session?.Warnings.Count ?? 0;
+        if (count == 0)
+        {
+            _statusWarnings.Visible = false;
+            _statusWarnings.Text = string.Empty;
+            return;
+        }
+        _statusWarnings.Visible = true;
+        _statusWarnings.Text = $"⚠ {count} warning(s)";
+        _statusWarnings.ToolTipText = "Click to view the warning details.";
+    }
+
+    private void ShowWarnings()
+    {
+        IReadOnlyList<string> warnings = _session?.Warnings ?? [];
+        using var dialog = new WarningsForm(warnings);
+        dialog.ShowDialog(this);
     }
 
     /// <summary>
@@ -232,7 +278,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         _detailTabsLoaded = true;
         try
         {
-            IReadOnlyList<PackageDetailTab> tabs = await _session.GetDetailTabsAsync(CancellationToken.None);
+            IReadOnlyList<PackageDetailTab> tabs = await _session.GetDetailTabsAsync(_lifetimeCancellation.Token);
             if (_session is null || IsDisposed) return;
             Logger.Info("Detail tabs: " + (tabs.Count == 0 ? "(none)" : string.Join(", ", tabs.Select(tab => tab.Title))));
             ShowDetailTabs(tabs);
@@ -297,9 +343,11 @@ internal sealed partial class PackageViewerForm : DarkForm
         _statusState.Text = "Loading package file list...";
         try
         {
-            _allFiles = await _session.GetFilesAsync(CancellationToken.None);
+            _allFiles = await _session.GetFilesAsync(_lifetimeCancellation.Token);
+            if (IsDisposed) return;
             PopulateFileTree();
             _statusState.Text = "Ready";
+            UpdateMenuStates();
         }
         catch (OperationCanceledException)
         {
@@ -322,7 +370,8 @@ internal sealed partial class PackageViewerForm : DarkForm
         _statusState.Text = "Loading trophy information...";
         try
         {
-            IReadOnlyList<PackageTrophy> trophies = await _session.GetTrophiesAsync(CancellationToken.None);
+            IReadOnlyList<PackageTrophy> trophies = await _session.GetTrophiesAsync(_lifetimeCancellation.Token);
+            if (IsDisposed) return;
             PopulateTrophies(trophies);
             _statusState.Text = "Ready";
         }
@@ -438,16 +487,21 @@ internal sealed partial class PackageViewerForm : DarkForm
         try
         {
             _fileTree.Nodes.Clear();
-            foreach (PackageFileNode root in PackageFileTree.Build(_allFiles))
-                AddTreeNode(_fileTree.Nodes, root);
+            // A synthetic root presents top-level files and folders together.
+            var root = new TreeNode("Package root") { Tag = null, ImageIndex = FileIcons.Folder, SelectedImageIndex = FileIcons.FolderOpen };
+            foreach (PackageFileNode model in PackageFileTree.Build(_allFiles))
+                AddTreeNode(root.Nodes, model);
+            root.Expand();
+            _fileRootNode = root;
+            _fileTree.Nodes.Add(root);
         }
         finally
         {
             _fileTree.EndUpdate();
         }
 
-        if (_fileTree.Nodes.Count > 0)
-            _fileTree.SelectedNode = _fileTree.Nodes[0];
+        if (_fileRootNode is not null)
+            _fileTree.SelectedNode = _fileRootNode;
         else
             RefreshFileList();
     }
@@ -504,46 +558,66 @@ internal sealed partial class PackageViewerForm : DarkForm
         if (filtering)
         {
             _fileMatchCount = 0;
+            _fileLimitHit = false;
             _fileList.BeginUpdate();
             try
             {
                 _fileList.Items.Clear();
-                CollectFileMatches(_fileTree.Nodes, query);
+                CollectFileMatches(_fileRootNode?.Nodes ?? _fileTree.Nodes, query);
             }
             finally { _fileList.EndUpdate(); }
             count = _fileMatchCount;
         }
-        else if (_fileTree.SelectedNode is { } selected)
-        {
-            PopulateFileList(selected);
-            count = _fileList.Items.Count;
-        }
         else
         {
-            _fileList.Items.Clear();
-            count = 0;
+            TreeNode? folder = CurrentFolderNode();
+            if (folder is not null)
+            {
+                PopulateFileList(folder);
+                count = _fileList.Items.Count;
+            }
+            else
+            {
+                _fileList.Items.Clear();
+                count = 0;
+            }
         }
 
+        UpdateBreadcrumb();
+        UpdateFileActionState();
         if (!_busy)
-            _statusState.Text = filtering ? $"{count:N0} match(es)." : $"{count:N0} item(s).";
+            _statusState.Text = filtering
+                ? (_fileLimitHit ? $"First {count:N0} matches shown - refine the filter." : $"{count:N0} match(es).")
+                : $"{count:N0} item(s).";
     }
 
-    private void PopulateFileList(TreeNode selected)
+    /// <summary>The folder whose contents the list shows: the selected folder, or a file's parent.</summary>
+    private TreeNode? CurrentFolderNode()
     {
-        if (selected.Tag is not PackageFileNode) return;
+        TreeNode? node = _fileTree.SelectedNode;
+        if (node is null) return _fileRootNode;
+        if (node == _fileRootNode) return node;
+        if (node.Tag is PackageFileNode { IsDirectory: true }) return node;
+        return node.Parent;
+    }
 
+    private void OnFileTreeNodeSelected() => RefreshFileList();
+
+    private void PopulateFileList(TreeNode folder)
+    {
         _fileList.BeginUpdate();
         try
         {
             _fileList.Items.Clear();
-            if (selected.Parent is not null)
-                _fileList.Items.Add(new ListViewItem(["...", string.Empty, string.Empty, string.Empty])
+            TreeNode? parent = folder == _fileRootNode ? null : folder.Parent;
+            if (parent is not null)
+                _fileList.Items.Add(new ListViewItem(["...", "Up", string.Empty, string.Empty])
                 {
-                    Tag = selected.Parent,
+                    Tag = parent,
                     ImageIndex = FileIcons.FolderOpen
                 });
 
-            foreach (TreeNode child in selected.Nodes)
+            foreach (TreeNode child in folder.Nodes)
             {
                 if (child.Tag is not PackageFileNode model) continue;
                 _fileList.Items.Add(BuildFileListItem(child, model));
@@ -559,6 +633,7 @@ internal sealed partial class PackageViewerForm : DarkForm
     {
         foreach (TreeNode node in nodes)
         {
+            if (_fileLimitHit) return;
             if (node.Tag is PackageFileNode model)
             {
                 bool matches = model.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
@@ -567,20 +642,71 @@ internal sealed partial class PackageViewerForm : DarkForm
                 {
                     if (_fileMatchCount >= MaximumFileItems)
                     {
-                        _fileList.Items.Add(new ListViewItem([
-                            "...", $"More than {MaximumFileItems:N0} matches - refine the filter", string.Empty, string.Empty
-                        ]));
+                        _fileLimitHit = true;
                         return;
                     }
                     _fileList.Items.Add(BuildFileListItem(node, model));
                     _fileMatchCount++;
-                    ExpandFileAncestors(node);
                 }
             }
 
             if (node.Nodes.Count > 0)
                 CollectFileMatches(node.Nodes, query);
         }
+    }
+
+    private void NavigateUp()
+    {
+        TreeNode? folder = CurrentFolderNode();
+        TreeNode? parent = folder?.Parent;
+        if (parent is null) return;
+        if (!string.IsNullOrEmpty(_fileFilter.SearchText))
+            _fileFilter.SearchText = string.Empty; // also refreshes
+        _fileTree.SelectedNode = parent;
+        parent.EnsureVisible();
+    }
+
+    private void UpdateBreadcrumb()
+    {
+        TreeNode? folder = CurrentFolderNode();
+        if (folder is null || folder == _fileRootNode)
+        {
+            _fileBreadcrumb.Text = "Package root";
+            return;
+        }
+        var parts = new List<string>();
+        TreeNode? current = folder;
+        while (current is not null && current != _fileRootNode)
+        {
+            if (current.Tag is PackageFileNode model) parts.Insert(0, model.Name);
+            current = current.Parent;
+        }
+        _fileBreadcrumb.Text = parts.Count == 0 ? "Package root" : "Package root / " + string.Join(" / ", parts);
+    }
+
+    private void UpdateFileActionState()
+    {
+        bool hasFiles = _session is not null && _filesLoaded;
+        _extractAllButton.Enabled = hasFiles && !_busy;
+        _extractSelectedButton.Enabled = hasFiles && !_busy && _fileList.SelectedItems.Count > 0;
+        _upButton.Enabled = !_busy && CurrentFolderNode() is { } folder && folder != _fileRootNode;
+        if (_extractAllMenuItem is not null) _extractAllMenuItem.Enabled = hasFiles && !_busy;
+    }
+
+    private void OnFileListKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode is Keys.Apps || (e.Shift && e.KeyCode == Keys.F10))
+        {
+            e.Handled = true;
+            ShowFileContextMenu();
+        }
+    }
+
+    private void ShowFileContextMenu()
+    {
+        if (_fileList.SelectedItems.Count == 0) return;
+        if (_fileList.SelectedItems[0].Text == "...") return;
+        _fileContextMenu.Show(_fileList, _fileList.PointToClient(Cursor.Position));
     }
 
     private static ListViewItem BuildFileListItem(TreeNode node, PackageFileNode model)
@@ -595,24 +721,23 @@ internal sealed partial class PackageViewerForm : DarkForm
         { Tag = node, ImageIndex = icon };
     }
 
-    private static void ExpandFileAncestors(TreeNode node)
-    {
-        TreeNode? parent = node.Parent;
-        while (parent is not null)
-        {
-            parent.Expand();
-            parent = parent.Parent;
-        }
-    }
-
     private void ActivateFileListItem()
     {
         if (_fileList.SelectedItems.Count == 0) return;
         if (_fileList.SelectedItems[0].Tag is not TreeNode node) return;
+
+        if (node == _fileRootNode)
+        {
+            _fileTree.SelectedNode = _fileRootNode;
+            return;
+        }
         if (node.Tag is not PackageFileNode model) return;
 
         if (model.IsDirectory)
         {
+            // Navigating into a folder must not keep re-applying the global filter.
+            if (!string.IsNullOrEmpty(_fileFilter.SearchText))
+                _fileFilter.SearchText = string.Empty;
             _fileTree.SelectedNode = node;
             node.EnsureVisible();
             return;
@@ -636,6 +761,13 @@ internal sealed partial class PackageViewerForm : DarkForm
     {
         if (_busy || _session is null) return;
 
+        // Latest preview wins: cancel the previous request and ignore any late result.
+        _previewCancellation?.Cancel();
+        _previewCancellation?.Dispose();
+        _previewCancellation = new CancellationTokenSource();
+        CancellationToken token = _previewCancellation.Token;
+        int version = ++_previewVersion;
+
         _previewInfo.Text = "Previewing " + Path.GetFileName(path) + "...";
         _previewText.Text = "Loading preview...";
         _previewText.Visible = true;
@@ -643,44 +775,60 @@ internal sealed partial class PackageViewerForm : DarkForm
         _previewImage.Image?.Dispose();
         _previewImage.Image = null;
 
+        PreviewResult result;
         try
         {
-            PreviewResult result = await Task.Run(() => BuildPreview(path, size));
-            if (result.Image is not null)
-            {
-                _previewImage.Image = result.Image;
-                _previewImage.Visible = true;
-                _previewText.Visible = false;
-                _previewText.Text = string.Empty;
-                _previewInfo.Text = path;
-            }
-            else
-            {
-                _previewImage.Visible = false;
-                _previewText.Visible = true;
-                _previewText.Text = result.Text ?? result.Message ?? string.Empty;
-                _previewInfo.Text = result.Image is null && result.Text is not null
-                    ? $"{Path.GetFileName(path)} ({FormatByteSize(size)}) - preview"
-                    : path;
-            }
+            result = await Task.Run(() => BuildPreview(path, size, token), token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
         }
         catch (Exception ex)
         {
+            if (version != _previewVersion || IsDisposed) return;
             _previewImage.Visible = false;
             _previewText.Visible = true;
             _previewText.Text = "Preview failed: " + ex.Message;
             _previewInfo.Text = path;
+            return;
+        }
+
+        if (version != _previewVersion || token.IsCancellationRequested || IsDisposed)
+        {
+            result.Image?.Dispose();
+            return;
+        }
+
+        if (result.Image is not null)
+        {
+            _previewImage.Image = result.Image;
+            _previewImage.Visible = true;
+            _previewText.Visible = false;
+            _previewText.Text = string.Empty;
+            _previewInfo.Text = path;
+        }
+        else
+        {
+            _previewImage.Visible = false;
+            _previewText.Visible = true;
+            _previewText.Text = result.Text ?? result.Message ?? string.Empty;
+            _previewInfo.Text = result.Image is null && result.Text is not null
+                ? $"{Path.GetFileName(path)} ({FormatByteSize(size)}) - preview"
+                : path;
         }
     }
 
-    private PreviewResult BuildPreview(string path, long size)
+    private PreviewResult BuildPreview(string path, long size, CancellationToken token)
     {
         if (_session is null) return new PreviewResult(null, null, "No package is open.");
         if (size > MaximumPreviewBytes)
             return new PreviewResult(null, null, $"The file is too large to preview ({FormatByteSize(size)}). Use Extract.");
 
+        token.ThrowIfCancellationRequested();
         string extension = Path.GetExtension(path).ToLowerInvariant();
         using Stream stream = _session.OpenFile(path);
+        token.ThrowIfCancellationRequested();
 
         if (extension is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif")
         {
@@ -698,6 +846,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         }
 
         byte[] buffer = ReadAtMost(stream, MaximumTextBytes);
+        token.ThrowIfCancellationRequested();
         if (!ContainsNullByte(buffer))
         {
             string text = Encoding.UTF8.GetString(buffer);
@@ -714,56 +863,105 @@ internal sealed partial class PackageViewerForm : DarkForm
     // Extraction
     // ------------------------------------------------------------------
 
-    private async Task ExtractSelectedAsync(bool preserveStructure)
+    private async Task ExtractSelectedAsync()
     {
         if (_busy || _session is null) return;
-        if (_fileList.SelectedItems.Count == 0 ||
-            _fileList.SelectedItems[0].Tag is not TreeNode node ||
-            node.Tag is not PackageFileNode model)
+
+        var paths = new List<string>();
+        foreach (ListViewItem item in _fileList.SelectedItems)
         {
-            DarkMessageBox.ShowWarning("Select a file or folder to extract.", "PkgViewer");
+            if (item.Tag is not TreeNode node || ReferenceEquals(node, _fileRootNode)) continue;
+            if (node.Tag is not PackageFileNode model) continue;
+            if (model.IsDirectory) paths.AddRange(CollectFilePaths(node));
+            else paths.Add(model.FullPath);
+        }
+        paths = paths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (paths.Count == 0)
+        {
+            DarkMessageBox.ShowWarning("Select one or more files or folders to extract.", "PkgViewer");
             return;
         }
 
-        using var dialog = new FolderBrowserDialog { Description = "Select the extraction folder" };
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (!PromptExtractionFolder(out string destination)) return;
+        if (DarkMessageBox.ShowWarning(
+                $"Extract {paths.Count:N0} file(s) into:\n{destination}\n\n" +
+                "Each file is written under its package-relative folder.",
+                "Extract", DarkDialogButton.YesNo) != DialogResult.Yes)
+            return;
 
-        BeginExtractionUi();
+        BeginExtractionUi(indeterminate: true);
         _statusState.Text = "Extracting selected data...";
+        int done = 0, extracted = 0, skipped = 0, failed = 0;
+        var errors = new List<string>();
         try
         {
             _extractCancellation = new CancellationTokenSource();
-            if (model.IsDirectory)
+            CancellationToken token = _extractCancellation.Token;
+            PackageConflictPolicy? applyToAll = null;
+            foreach (string path in paths)
             {
-                string[] children = CollectFilePaths(node);
-                int done = 0;
-                foreach (string child in children)
+                token.ThrowIfCancellationRequested();
+                _statusState.Text = $"Extracting {done + 1}/{paths.Count}: {path}";
+                try
                 {
-                    _extractCancellation.Token.ThrowIfCancellationRequested();
-                    _statusState.Text = $"Extracting {done + 1}/{children.Length}: {child}";
-                    string relative = preserveStructure
-                        ? child
-                        : child.StartsWith(model.FullPath + "/", StringComparison.OrdinalIgnoreCase)
-                            ? child[(model.FullPath.Length + 1)..]
-                            : child;
-                    string destination = Path.Combine(dialog.SelectedPath,
-                        relative.Replace('/', Path.DirectorySeparatorChar));
-                    await _session.ExtractFileAsync(child, destination, null, _extractCancellation.Token);
-                    done++;
+                    string full = PackagePath.ResolveInside(destination, path);
+                    bool conflict = File.Exists(full) || Directory.Exists(full);
+                    PackageConflictPolicy policy;
+                    if (!conflict)
+                    {
+                        policy = PackageConflictPolicy.Replace;
+                    }
+                    else if (applyToAll is { } chosen)
+                    {
+                        policy = chosen;
+                    }
+                    else
+                    {
+                        using var conflictForm = new ExtractionConflictForm(Path.GetFileName(full), allowApplyToAll: true);
+                        conflictForm.ShowDialog(this);
+                        if (conflictForm.Choice == ExtractionConflictChoice.Cancel)
+                            throw new OperationCanceledException();
+                        policy = conflictForm.Choice switch
+                        {
+                            ExtractionConflictChoice.Skip => PackageConflictPolicy.Skip,
+                            ExtractionConflictChoice.KeepBoth => PackageConflictPolicy.KeepBoth,
+                            _ => PackageConflictPolicy.Replace
+                        };
+                        if (conflictForm.ApplyToAll) applyToAll = policy;
+                    }
+
+                    PackageExtractionResult result = await _session.ExtractAsync(
+                        new PackageExtractionRequest(path, destination, policy), null, token);
+                    switch (result.Outcome)
+                    {
+                        case PackageExtractionOutcome.Skipped:
+                            skipped++;
+                            break;
+                        case PackageExtractionOutcome.Failed:
+                            failed++;
+                            errors.Add($"{path}: {result.Error}");
+                            break;
+                        default:
+                            extracted++;
+                            break;
+                    }
                 }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    errors.Add($"{path}: {ex.Message}");
+                }
+                done++;
             }
-            else
-            {
-                string relative = preserveStructure ? model.FullPath : Path.GetFileName(model.FullPath);
-                string destination = Path.Combine(dialog.SelectedPath,
-                    relative.Replace('/', Path.DirectorySeparatorChar));
-                await _session.ExtractFileAsync(model.FullPath, destination, null, _extractCancellation.Token);
-            }
-            DarkMessageBox.ShowInformation("Selected data extracted.", "PkgViewer");
+            ReportExtraction(paths.Count, extracted, skipped, failed, errors, destination);
         }
         catch (OperationCanceledException)
         {
-            DarkMessageBox.ShowInformation("Extraction cancelled.", "PkgViewer");
+            DarkMessageBox.ShowInformation("Extraction cancelled. Files already extracted are kept.", "PkgViewer");
         }
         catch (Exception ex)
         {
@@ -779,15 +977,28 @@ internal sealed partial class PackageViewerForm : DarkForm
     private async Task ExtractFullAsync()
     {
         if (_busy || _session is null) return;
-        using var dialog = new FolderBrowserDialog { Description = "Select a folder to extract the package into" };
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (!_filesLoaded) await EnsureFilesAsync();
+        if (_session is null || _busy) return;
 
         string title = string.IsNullOrWhiteSpace(_session.Info.Title)
             ? Path.GetFileNameWithoutExtension(_currentPackagePath)
             : _session.Info.Title;
-        string target = Path.Combine(dialog.SelectedPath, PackageFileName.Sanitize(title));
+        if (!PromptExtractionFolder(out string root)) return;
+        string target = Path.Combine(root, PackageFileName.Sanitize(title));
 
-        BeginExtractionUi();
+        using (var conflictForm = new ExtractionConflictForm(target, allowApplyToAll: false))
+        {
+            conflictForm.ShowDialog(this);
+            if (conflictForm.Choice == ExtractionConflictChoice.Cancel) return;
+            _fullExtractPolicy = conflictForm.Choice switch
+            {
+                ExtractionConflictChoice.Skip => PackageConflictPolicy.Skip,
+                ExtractionConflictChoice.KeepBoth => PackageConflictPolicy.KeepBoth,
+                _ => PackageConflictPolicy.Replace
+            };
+        }
+
+        BeginExtractionUi(indeterminate: false);
         _statusState.Text = "Preparing extraction...";
         try
         {
@@ -798,12 +1009,26 @@ internal sealed partial class PackageViewerForm : DarkForm
                 _progressBar.Value = Math.Min(report.FilesDone, _progressBar.Maximum);
                 _statusState.Text = $"Extracting {report.FilesDone}/{report.FileCount}: {report.CurrentFile}";
             });
-            await _session.ExtractAllAsync(target, progress, _extractCancellation.Token);
-            DarkMessageBox.ShowInformation($"PKG extracted to:\n{target}", "PkgViewer");
+            PackageExtractSummary summary = await _session.ExtractAllAsync(
+                target, _fullExtractPolicy, progress, _extractCancellation.Token);
+            if (summary.HasFailures)
+            {
+                using var report = new WarningsForm(
+                    [$"{summary.Extracted:N0} extracted, {summary.Skipped:N0} skipped, {summary.Failed:N0} failed.", .. summary.Errors]);
+                report.Text = "Extraction completed with errors";
+                report.ShowDialog(this);
+            }
+            else
+            {
+                DarkMessageBox.ShowInformation(
+                    $"Extracted {summary.Extracted:N0} file(s) to:\n{target}" +
+                    (summary.Skipped > 0 ? $"\n\n{summary.Skipped:N0} existing file(s) were skipped." : string.Empty),
+                    "PkgViewer");
+            }
         }
         catch (OperationCanceledException)
         {
-            DarkMessageBox.ShowInformation("Extraction cancelled.", "PkgViewer");
+            DarkMessageBox.ShowInformation("Extraction cancelled. Files already extracted are kept.", "PkgViewer");
         }
         catch (Exception ex)
         {
@@ -814,6 +1039,46 @@ internal sealed partial class PackageViewerForm : DarkForm
         {
             EndExtractionUi();
         }
+    }
+
+    private PackageConflictPolicy _fullExtractPolicy = PackageConflictPolicy.Replace;
+
+    private void ReportExtraction(int total, int extracted, int skipped, int failed,
+        IReadOnlyList<string> errors, string destination)
+    {
+        if (failed > 0)
+        {
+            using var report = new WarningsForm(
+                [$"{extracted:N0} extracted, {skipped:N0} skipped, {failed:N0} failed.", .. errors]);
+            report.Text = "Extraction completed with errors";
+            report.ShowDialog(this);
+        }
+        else
+        {
+            DarkMessageBox.ShowInformation(
+                $"Extracted {extracted:N0} of {total:N0} file(s) to:\n{destination}" +
+                (skipped > 0 ? $"\n\n{skipped:N0} existing file(s) were skipped." : string.Empty),
+                "PkgViewer");
+        }
+    }
+
+    private bool PromptExtractionFolder(out string folder)
+    {
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "Select the extraction folder",
+            SelectedPath = Directory.Exists(_lastExtractionDirectory) ? _lastExtractionDirectory : string.Empty
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            folder = string.Empty;
+            return false;
+        }
+        folder = dialog.SelectedPath;
+        _lastExtractionDirectory = folder;
+        _settings.LastExtractionDirectory = folder;
+        _settings.Save();
+        return true;
     }
 
     private static string[] CollectFilePaths(TreeNode node)
@@ -831,40 +1096,280 @@ internal sealed partial class PackageViewerForm : DarkForm
         return [.. paths];
     }
 
-    private void BeginExtractionUi()
+    private void BeginExtractionUi(bool indeterminate)
     {
         _busy = true;
         _progressBar.Visible = true;
-        _progressBar.Style = ProgressBarStyle.Continuous;
+        _progressBar.Style = indeterminate ? ProgressBarStyle.Marquee : ProgressBarStyle.Continuous;
+        _progressBar.MarqueeAnimationSpeed = indeterminate ? 30 : 0;
         _progressBar.Minimum = 0;
         _progressBar.Value = 0;
         _progressBar.Maximum = 1;
         _stopExtractButton.Visible = true;
         _stopExtractButton.Enabled = true;
         _tabs.Enabled = false;
+        UpdateFileActionState();
     }
 
     private void EndExtractionUi()
     {
         _extractCancellation?.Dispose();
         _extractCancellation = null;
+        if (_closing || IsDisposed) return;
         _stopExtractButton.Visible = false;
         _progressBar.Visible = false;
+        _progressBar.Style = ProgressBarStyle.Continuous;
+        _progressBar.MarqueeAnimationSpeed = 0;
         _tabs.Enabled = true;
         _busy = false;
         _statusState.Text = "Ready";
+        UpdateFileActionState();
     }
 
     private void StopExtraction()
     {
         _extractCancellation?.Cancel();
         _stopExtractButton.Enabled = false;
-        _statusState.Text = "Stopping extraction...";
+        _statusState.Text = "Stopping extraction (the current file completes, then it stops)...";
     }
 
     // ------------------------------------------------------------------
     // Menu actions
     // ------------------------------------------------------------------
+
+    private void SelectTab(DarkTabPage page)
+    {
+        if (_tabs.TabPages.Contains(page)) _tabs.SelectedTab = page;
+    }
+
+    private void FocusFileSearch()
+    {
+        SelectTab(_filesTab);
+        _fileFilter.Focus();
+    }
+
+    private void OpenAnotherPackage()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Open PS4/PS5 package",
+            Filter = "Package files|*.pkg;*.ffpfsc;*.ffpkg;*.exfat|All files|*.*",
+            CheckFileExists = true
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        _currentPackagePath = Path.GetFullPath(dialog.FileName);
+        _passcode = null;
+        _statusPath.Text = _currentPackagePath;
+        _ = LoadPackageAsync();
+    }
+
+    private void OpenSourceFolder()
+    {
+        try
+        {
+            string? folder = Directory.Exists(_currentPackagePath)
+                ? _currentPackagePath
+                : Path.GetDirectoryName(_currentPackagePath);
+            if (string.IsNullOrEmpty(folder)) return;
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{_currentPackagePath}\"")
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)
+        {
+            DarkMessageBox.ShowError(ex.Message, "Open source folder");
+        }
+    }
+
+    private void CopySourcePath() => CopyToClipboard(_currentPackagePath, "Source path");
+
+    private static void CopyToClipboard(string? value, string what)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            DarkMessageBox.ShowWarning("There is nothing to copy yet.", "PkgViewer");
+            return;
+        }
+        try
+        {
+            Clipboard.SetText(value);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+        }
+    }
+
+    private void OpenContainingFolder()
+    {
+        if (_fileList.SelectedItems.Count == 0 || _fileList.SelectedItems[0].Tag is not TreeNode node) return;
+        TreeNode? folder = node.Tag is PackageFileNode { IsDirectory: true } ? node : node.Parent;
+        if (folder is null) return;
+        if (!string.IsNullOrEmpty(_fileFilter.SearchText)) _fileFilter.SearchText = string.Empty;
+        _fileTree.SelectedNode = folder;
+        folder.EnsureVisible();
+    }
+
+    private void TogglePreviewPane()
+    {
+        bool visible = _previewPaneMenuItem?.Checked ?? true;
+        SetPreviewPaneVisible(visible);
+        _settings.PreviewPaneVisible = visible;
+        _settings.Save();
+    }
+
+    private void SetPreviewPaneVisible(bool visible) => _previewPanel.Visible = visible;
+
+    private void ResetLayout()
+    {
+        _settings.FilesSplitterSizes = string.Empty;
+        _settings.FileColumnWidths = string.Empty;
+        _settings.PreviewPaneVisible = true;
+        if (_filesSplit is not null) _filesSplit.PanelSizes = [280, 420, 380];
+        int[] widths = [220, 100, 260, 90];
+        for (int index = 0; index < _fileList.Columns.Count && index < widths.Length; index++)
+            _fileList.Columns[index].Width = widths[index];
+        if (_previewPaneMenuItem is not null) _previewPaneMenuItem.Checked = true;
+        SetPreviewPaneVisible(true);
+        _settings.Save();
+        statusOnly("Layout reset.");
+    }
+
+    private async Task RetryContentAccessAsync()
+    {
+        if (_session is null)
+        {
+            DarkMessageBox.ShowInformation("Open a package first.", "PkgViewer");
+            return;
+        }
+        if (!PromptForPasscode(out string? passcode)) return;
+        _passcode = passcode;
+        await LoadPackageAsync();
+    }
+
+    private void ShowAssociations() => new FileAssociationsForm().ShowDialog(this);
+
+    private void OpenLogFolder()
+    {
+        try
+        {
+            string directory = Path.GetDirectoryName(Logger.LogPath) ?? ".";
+            Directory.CreateDirectory(directory);
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{directory}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
+        {
+            DarkMessageBox.ShowError($"Could not open the log folder:\n\n{ex.Message}", "PkgViewer");
+        }
+    }
+
+    private void CopyDiagnostics()
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("PkgViewer diagnostic summary");
+        builder.AppendLine("Source: " + _currentPackagePath);
+        if (_session is { } session)
+        {
+            builder.AppendLine($"Platform: {session.Info.PlatformDisplay} ({session.Info.FormatDisplay})");
+            builder.AppendLine($"Title: {session.Info.Title}");
+            builder.AppendLine($"Title ID: {session.Info.TitleId}");
+            builder.AppendLine($"Content ID: {session.Info.ContentId}");
+            builder.AppendLine($"Warnings: {session.Warnings.Count}");
+            foreach (string warning in session.Warnings) builder.AppendLine("  - " + warning);
+        }
+        else
+        {
+            builder.AppendLine("No package is open.");
+        }
+        string summary = builder.ToString();
+        try
+        {
+            Clipboard.SetText(summary);
+            DarkMessageBox.ShowInformation("Diagnostic summary copied to the clipboard.", "PkgViewer");
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            using var report = new WarningsForm([summary]);
+            report.Text = "Diagnostic summary";
+            report.ShowDialog(this);
+        }
+    }
+
+    private void ExportMetadata()
+    {
+        if (_session is null) return;
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Export package metadata",
+            Filter = "Text report (*.txt)|*.txt|All files|*.*",
+            FileName = Path.GetFileNameWithoutExtension(_currentPackagePath) + "-metadata.txt"
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            File.WriteAllText(dialog.FileName, BuildMetadataReport(_session));
+            DarkMessageBox.ShowInformation("Metadata exported.", "PkgViewer");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DarkMessageBox.ShowError(ex.Message, "Export metadata");
+        }
+    }
+
+    private static string BuildMetadataReport(IPackageSession session)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("PkgViewer metadata export");
+        builder.AppendLine("Generated: " + DateTime.Now.ToString("u"));
+        builder.AppendLine();
+        PackageInfo info = session.Info;
+        builder.AppendLine("[Overview]");
+        builder.AppendLine("Source: " + info.SourcePath);
+        builder.AppendLine("Platform: " + info.PlatformDisplay + " (" + info.FormatDisplay + ")");
+        builder.AppendLine("Title: " + info.Title);
+        builder.AppendLine("Title ID: " + info.TitleId);
+        builder.AppendLine("Content ID: " + info.ContentId);
+        builder.AppendLine("Category: " + PackageCategory.Describe(info.Category));
+        builder.AppendLine("Version: " + info.Version);
+        builder.AppendLine("Required firmware: " + info.RequiredFirmware);
+        foreach (PackageInfoRow row in info.ExtraRows)
+            builder.AppendLine($"{row.Label}: {row.Value}");
+
+        AppendRows(builder, "Header", session.HeaderFields);
+        AppendRows(builder, "Build info", session.BuildInfoFields);
+        AppendRows(builder, "PARAM.SFO", session.SfoEntries.Select(entry => new PackageInfoRow(entry.Name, entry.Value)));
+        AppendRows(builder, "Entries", session.EntryRecords.Select(entry =>
+            new PackageInfoRow(entry.Name, $"offset {entry.Offset} size {entry.Size} flags {entry.Flags1}/{entry.Flags2} encrypted {entry.Encrypted}")));
+
+        builder.AppendLine();
+        builder.AppendLine("[Warnings]");
+        if (session.Warnings.Count == 0) builder.AppendLine("(none)");
+        else foreach (string warning in session.Warnings) builder.AppendLine("- " + warning);
+        return builder.ToString();
+    }
+
+    private static void AppendRows(StringBuilder builder, string title, IEnumerable<PackageInfoRow> rows)
+    {
+        builder.AppendLine();
+        builder.AppendLine("[" + title + "]");
+        bool any = false;
+        foreach (PackageInfoRow row in rows)
+        {
+            builder.AppendLine($"{row.Label}: {row.Value}");
+            any = true;
+        }
+        if (!any) builder.AppendLine("(none)");
+    }
+
+    private void UpdateMenuStates()
+    {
+        bool hasSession = _session is not null;
+        if (_retryAccessMenuItem is not null) _retryAccessMenuItem.Enabled = hasSession;
+        if (_exportMetadataMenuItem is not null) _exportMetadataMenuItem.Enabled = hasSession;
+        if (_extractAllMenuItem is not null) _extractAllMenuItem.Enabled = hasSession && _filesLoaded && !_busy;
+    }
+
+    private void statusOnly(string text) => _statusState.Text = text;
 
     private void CopyInfo(string kind)
     {
@@ -913,22 +1418,33 @@ internal sealed partial class PackageViewerForm : DarkForm
     private void SaveArtwork()
     {
         if (_session is null) return;
-        using var dialog = new FolderBrowserDialog { Description = "Select a folder to save artwork into" };
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "Select a folder to save artwork into",
+            SelectedPath = Directory.Exists(_lastExtractionDirectory) ? _lastExtractionDirectory : string.Empty
+        };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
         string name = Path.GetFileNameWithoutExtension(_currentPackagePath);
+        var saved = new List<string>();
         var failures = new List<string>();
-        SaveImage(_session.Artwork.Icon, dialog.SelectedPath, name + "_ICON.PNG", failures);
-        SaveImage(_session.Artwork.Pic0, dialog.SelectedPath, name + "_PIC0.PNG", failures);
-        SaveImage(_session.Artwork.Pic1, dialog.SelectedPath, name + "_PIC1.PNG", failures);
+        SaveImage(_session.Artwork.Icon, dialog.SelectedPath, name + "_ICON.PNG", saved, failures);
+        SaveImage(_session.Artwork.Pic0, dialog.SelectedPath, name + "_PIC0.PNG", saved, failures);
+        SaveImage(_session.Artwork.Pic1, dialog.SelectedPath, name + "_PIC1.PNG", saved, failures);
+        SaveImage(_session.Artwork.Pic2, dialog.SelectedPath, name + "_PIC2.PNG", saved, failures);
 
         if (failures.Count > 0)
-            DarkMessageBox.ShowWarning("Artwork could not be saved: " + string.Join(" ", failures), "PkgViewer");
+            DarkMessageBox.ShowWarning(
+                $"Saved {saved.Count:N0} image(s); could not save: {string.Join(", ", failures)}", "PkgViewer");
+        else if (saved.Count == 0)
+            DarkMessageBox.ShowInformation("No artwork was available to save.", "PkgViewer");
         else
-            DarkMessageBox.ShowInformation("Artwork saved.", "PkgViewer");
+            DarkMessageBox.ShowInformation(
+                $"Saved {saved.Count:N0} image(s) to:\n{dialog.SelectedPath}\n\n{string.Join(", ", saved)}", "PkgViewer");
     }
 
-    private static void SaveImage(PackageImage? image, string folder, string fileName, List<string> failures)
+    private static void SaveImage(PackageImage? image, string folder, string fileName,
+        List<string> saved, List<string> failures)
     {
         if (image is null || image.IsEmpty) return;
         try
@@ -936,6 +1452,7 @@ internal sealed partial class PackageViewerForm : DarkForm
             using Bitmap? bitmap = ToBitmap(image);
             if (bitmap is null) return;
             bitmap.Save(Path.Combine(folder, fileName), ImageFormat.Png);
+            saved.Add(fileName);
         }
         catch (Exception ex) when (ex is IOException or ExternalException or ArgumentException)
         {
@@ -1046,13 +1563,61 @@ internal sealed partial class PackageViewerForm : DarkForm
 
     private void OnFormClosing(object? sender, FormClosingEventArgs e)
     {
-        if (_busy && _extractCancellation is not null)
+        if (_extractCancellation is not null)
         {
             e.Cancel = true;
-            DarkMessageBox.ShowInformation("Extraction in progress. Stop it before closing.", "PkgViewer");
-            return;
+            if (DarkMessageBox.ShowWarning(
+                    "Extraction is in progress. Stop it and close?", "PkgViewer",
+                    DarkDialogButton.YesNo) != DialogResult.Yes)
+                return;
+            _extractCancellation.Cancel();
         }
+
+        _closing = true;
+        _lifetimeCancellation.Cancel();
+        _previewCancellation?.Cancel();
+        CaptureFileLayout();
         ReleaseResources();
+    }
+
+    private void CaptureFileLayout()
+    {
+        try
+        {
+            if (_filesSplit is not null) _settings.FilesSplitterSizes = string.Join(",", _filesSplit.PanelSizes);
+            _settings.FileColumnWidths = string.Join(",", _fileList.Columns.Cast<ColumnHeader>().Select(column => column.Width));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException) { }
+
+        Rectangle bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+        if (bounds.Width >= 800 && bounds.Height >= 560)
+        {
+            _settings.WindowWidth = bounds.Width;
+            _settings.WindowHeight = bounds.Height;
+        }
+        _settings.WindowMaximized = WindowState == FormWindowState.Maximized;
+        _settings.Save();
+    }
+
+    private void RestoreFileLayout()
+    {
+        if (_filesSplit is not null && TryParseLayout(_settings.FilesSplitterSizes, 3, out int[] sizes))
+            _filesSplit.PanelSizes = sizes;
+        if (TryParseLayout(_settings.FileColumnWidths, _fileList.Columns.Count, out int[] widths))
+            for (int index = 0; index < widths.Length; index++) _fileList.Columns[index].Width = widths[index];
+    }
+
+    private static bool TryParseLayout(string text, int expected, out int[] values)
+    {
+        values = [];
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        string[] parts = text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != expected) return false;
+        var parsed = new int[expected];
+        for (int index = 0; index < expected; index++)
+            if (!int.TryParse(parts[index], out parsed[index]) || parsed[index] <= 0) return false;
+        values = parsed;
+        return true;
     }
 
     private void ReleaseResources()

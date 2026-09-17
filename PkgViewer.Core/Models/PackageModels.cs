@@ -71,6 +71,25 @@ public sealed class PackageArtwork
     public PackageImage? Pic2 { get; init; }
 }
 
+/// <summary>Maps the leading letter of a title/content ID to a region name.</summary>
+public static class PackageRegion
+{
+    public static string FromId(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return "Unknown";
+        return char.ToUpperInvariant(id[0]) switch
+        {
+            'U' => "Americas",
+            'E' => "Europe",
+            'J' => "Japan",
+            'K' => "Korea",
+            'A' => "Asia",
+            'H' => "Hong Kong",
+            _ => "Other"
+        };
+    }
+}
+
 /// <summary>Platform-neutral package summary produced by every backend.</summary>
 public sealed class PackageInfo
 {
@@ -85,6 +104,8 @@ public sealed class PackageInfo
     public string Version { get; init; } = string.Empty;
     public string PackageVersion { get; init; } = string.Empty;
     public string Category { get; init; } = string.Empty;
+    /// <summary>Human-readable region derived from the title/content ID or the package metadata.</summary>
+    public string Region { get; init; } = string.Empty;
     public string BuildState { get; init; } = string.Empty;
     public string RequiredFirmware { get; init; } = string.Empty;
     public string SdkVersion { get; init; } = string.Empty;

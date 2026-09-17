@@ -131,7 +131,8 @@ internal sealed partial class PackageViewerForm : DarkForm
             DescribeCategory(info),
             info.BuildState,
             string.IsNullOrWhiteSpace(info.Version) ? string.Empty : "v" + info.Version,
-            SizeText(info)
+            SizeText(info),
+            info.Region
         }.Where(part => !string.IsNullOrWhiteSpace(part)));
         _contentIdLabel.Text = info.ContentId;
         _toolTip.SetToolTip(_titleLabel, displayTitle);
@@ -143,6 +144,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         SetOverviewValue("Title ID", info.TitleId);
         SetOverviewValue("Content ID", info.ContentId);
         SetOverviewValue("Category", DescribeCategory(info));
+        SetOverviewValue("Region", info.Region);
         SetOverviewValue("Package state", info.BuildState);
         SetOverviewValue("Application version", info.Version);
         SetOverviewValue("Package version", info.PackageVersion);
@@ -443,7 +445,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         empty.Visible = !hasImage;
     }
 
-    private const int FixedOverviewRows = 9;
+    private const int FixedOverviewRows = 10;
 
     private void SetOverviewValue(string key, string value)
     {
@@ -477,31 +479,9 @@ internal sealed partial class PackageViewerForm : DarkForm
 
             foreach (PackageInfoRow row in rows)
             {
-                int index = table.RowCount;
-                table.RowCount = index + 1;
-                table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-                var caption = new DarkLabel
-                {
-                    Text = row.Label,
-                    Dock = DockStyle.Fill,
-                    Margin = new Padding(3),
-                    TextAlign = ContentAlignment.MiddleLeft
-                };
-                var value = new DarkLabel
-                {
-                    Text = row.Value,
-                    Dock = DockStyle.Fill,
-                    Margin = new Padding(3),
-                    AutoEllipsis = true,
-                    TextAlign = ContentAlignment.MiddleLeft,
-                    Cursor = Cursors.Hand
-                };
-                value.DoubleClick += (_, _) => CopyToClipboard(value.Text, row.Label);
+                DarkLabel value = AddOverviewRow(table, row.Label, bold: false, track: false);
+                value.Text = row.Value;
                 _toolTip.SetToolTip(value, row.Value);
-
-                table.Controls.Add(caption, 0, index);
-                table.Controls.Add(value, 1, index);
             }
         }
         finally
@@ -1477,19 +1457,40 @@ internal sealed partial class PackageViewerForm : DarkForm
         _settings.Save();
     }
 
-    private void SetPreviewPaneVisible(bool visible) => _previewPanel.Visible = visible;
+    private int[]? _savedPreviewSplitSizes;
+
+    /// <summary>
+    /// Adds or removes the preview pane from the file split so disabling it leaves only the folder
+    /// tree and the file list, rather than an empty third pane.
+    /// </summary>
+    private void SetPreviewPaneVisible(bool visible)
+    {
+        if (_filesSplit is null) return;
+        bool present = _filesSplit.Panels.Contains(_previewPanel);
+        if (visible && !present)
+        {
+            _filesSplit.AddPanel(_previewPanel);
+            if (_savedPreviewSplitSizes is { Length: 3 }) _filesSplit.PanelSizes = _savedPreviewSplitSizes;
+        }
+        else if (!visible && present)
+        {
+            _savedPreviewSplitSizes = _filesSplit.PanelSizes;
+            _filesSplit.RemovePanel(_previewPanel);
+        }
+    }
 
     private void ResetLayout()
     {
         _settings.FilesSplitterSizes = string.Empty;
         _settings.FileColumnWidths = string.Empty;
         _settings.PreviewPaneVisible = true;
+        if (_previewPaneMenuItem is not null) _previewPaneMenuItem.Checked = true;
+        SetPreviewPaneVisible(true);
+        _savedPreviewSplitSizes = null;
         if (_filesSplit is not null) _filesSplit.PanelSizes = [280, 420, 380];
         int[] widths = [220, 100, 260, 90];
         for (int index = 0; index < _fileList.Columns.Count && index < widths.Length; index++)
             _fileList.Columns[index].Width = widths[index];
-        if (_previewPaneMenuItem is not null) _previewPaneMenuItem.Checked = true;
-        SetPreviewPaneVisible(true);
         _settings.Save();
         statusOnly("Layout reset.");
     }
@@ -1860,7 +1861,8 @@ internal sealed partial class PackageViewerForm : DarkForm
 
     private void RestoreFileLayout()
     {
-        if (_filesSplit is not null && TryParseLayout(_settings.FilesSplitterSizes, 3, out int[] sizes))
+        if (_filesSplit is not null &&
+            TryParseLayout(_settings.FilesSplitterSizes, _filesSplit.Panels.Count, out int[] sizes))
             _filesSplit.PanelSizes = sizes;
         if (TryParseLayout(_settings.FileColumnWidths, _fileList.Columns.Count, out int[] widths))
             for (int index = 0; index < widths.Length; index++) _fileList.Columns[index].Width = widths[index];

@@ -461,6 +461,7 @@ internal sealed class Ps5PackageSession : IPackageSession
             ContentId = _game.ContentId,
             Version = _game.DisplayVersion,
             PackageVersion = _game.ContentVersion,
+            Region = PackageRegion.FromId(!string.IsNullOrWhiteSpace(_game.ContentId) ? _game.ContentId : _game.TitleId),
             Category = PackageCategory.DescribePs5(_game.ApplicationCategory,
                 _game.Package?.Kind is SonyPkgKind.FinalizedPatch),
             BuildState = _game.Package?.KindDisplayName ?? _game.SourceDescription,

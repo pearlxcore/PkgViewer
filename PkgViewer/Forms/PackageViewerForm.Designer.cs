@@ -325,46 +325,36 @@ partial class PackageViewerForm
     {
         string[] captions =
         [
-            "Title", "Title ID", "Content ID", "Category", "Package state",
+            "Title", "Title ID", "Content ID", "Category", "Region", "Package state",
             "Application version", "Package version", "Required firmware", "Package size"
         ];
 
-        var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 9 };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130F));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        for (int row = 0; row < 9; row++)
+        // Auto-sized rows in a scroll host so the summary renders identically for every format and
+        // can grow with the backend's extra rows without leaving large empty gaps.
+        var table = new TableLayoutPanel
         {
-            table.RowStyles.Add(new RowStyle(SizeType.Percent, 11.11111F));
-
-            var caption = new DarkLabel
-            {
-                Text = captions[row],
-                Dock = DockStyle.Fill,
-                Margin = new Padding(3),
-                Font = new Font("Segoe UI", 9F),
-                TextAlign = ContentAlignment.MiddleLeft
-            };
-            var value = new DarkLabel
-            {
-                Text = "Not available",
-                Dock = DockStyle.Fill,
-                Margin = new Padding(3),
-                Font = row == 0 ? new Font("Segoe UI", 9F, FontStyle.Bold) : new Font("Segoe UI", 9F),
-                TextAlign = ContentAlignment.MiddleLeft,
-                AutoEllipsis = true,
-                Cursor = Cursors.Hand
-            };
-            value.DoubleClick += (_, _) => CopyToClipboard(value.Text, "Value");
-            _overviewValues[captions[row]] = value;
-            table.Controls.Add(caption, 0, row);
-            table.Controls.Add(value, 1, row);
-        }
+            Dock = DockStyle.Top,
+            ColumnCount = 2,
+            RowCount = 0,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Margin = new Padding(0),
+            Padding = new Padding(0)
+        };
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140F));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         _overviewSummaryTable = table;
+
+        foreach (string caption in captions)
+            AddOverviewRow(table, caption, bold: caption == "Title");
+
+        var host = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(0) };
+        host.Controls.Add(table);
 
         _overviewPanel.Dock = DockStyle.Fill;
         _overviewPanel.Margin = new Padding(0, 0, 6, 0);
         _overviewPanel.Padding = new Padding(16, 12, 16, 16);
-        _overviewPanel.Controls.Add(table);
+        _overviewPanel.Controls.Add(host);
 
         SetupGrid(_sfoGrid);
         _sfoGrid.Columns.Add(TextColumn("Key", 35F));
@@ -388,6 +378,42 @@ partial class PackageViewerForm
         layout.Controls.Add(_sfoPanel, 1, 0);
         _overviewLayout = layout;
         _overviewTab.Controls.Add(layout);
+    }
+
+    /// <summary>Adds one auto-sized caption/value row to the summary table and returns the value label.</summary>
+    private DarkLabel AddOverviewRow(TableLayoutPanel table, string caption, bool bold = false, bool track = true)
+    {
+        int index = table.RowCount;
+        table.RowCount = index + 1;
+        table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        var captionLabel = new DarkLabel
+        {
+            Text = caption,
+            AutoSize = false,
+            Height = 22,
+            Dock = DockStyle.Fill,
+            Margin = new Padding(3),
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+        var value = new DarkLabel
+        {
+            Text = "Not available",
+            AutoSize = false,
+            Height = 22,
+            Dock = DockStyle.Fill,
+            Margin = new Padding(3),
+            TextAlign = ContentAlignment.MiddleLeft,
+            AutoEllipsis = true,
+            Cursor = Cursors.Hand,
+            Font = bold ? new Font("Segoe UI", 9F, FontStyle.Bold) : new Font("Segoe UI", 9F)
+        };
+        value.DoubleClick += (_, _) => CopyToClipboard(value.Text, caption);
+        if (track) _overviewValues[caption] = value;
+
+        table.Controls.Add(captionLabel, 0, index);
+        table.Controls.Add(value, 1, index);
+        return value;
     }
 
     // ------------------------------------------------------------------

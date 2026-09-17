@@ -259,7 +259,6 @@ internal sealed class Ps4PackageSession : IPackageSession
         PkgInfo info = _reader.GetInfo();
         var extras = new List<PackageInfoRow>
         {
-            new("Region", string.IsNullOrEmpty(_metadata.Region) ? "Unknown" : _metadata.Region),
             new("PKG kind", _metadata.Kind.ToString()),
             new("Header content type", $"0x{_metadata.Header.ContentType:X8}"),
             new("Header content flags", $"0x{_metadata.Header.ContentFlags:X8}")
@@ -278,6 +277,9 @@ internal sealed class Ps4PackageSession : IPackageSession
             Version = _metadata.APP_VER,
             PackageVersion = _metadata.ParamSfo?.GetString("VERSION") ?? string.Empty,
             Category = _metadata.Category,
+            Region = string.IsNullOrWhiteSpace(_metadata.Region)
+                ? PackageRegion.FromId(_metadata.Content_ID)
+                : _metadata.Region,
             BuildState = DescribeBuildState(_metadata.PKGState),
             RequiredFirmware = info.SystemVersion,
             FileCount = Files.Count(file => !file.IsDirectory),

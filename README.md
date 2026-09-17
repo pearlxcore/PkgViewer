@@ -45,6 +45,14 @@ Pkg Viewer shares the DarkUI and PS4/PS5 PKG Tool sources, so build it from the 
 dotnet build .\PkgViewer.slnx -c Release
 ```
 
+# Screenshots
+
+<img width="1102" height="712" alt="image" src="https://github.com/user-attachments/assets/336b1389-f716-4d50-8a50-b7c83fb28b1f" />
+<img width="1102" height="712" alt="image" src="https://github.com/user-attachments/assets/60947ca2-80d9-46b2-8db7-c00160de3ad5" />
+<img width="1102" height="712" alt="image" src="https://github.com/user-attachments/assets/ec03f0d4-e2ee-4457-b13a-2af70dc63f68" />
+<img width="1102" height="712" alt="image" src="https://github.com/user-attachments/assets/299716c9-e6bf-46fa-8b20-c6b13e05e35e" />
+
+
 # License
 
 GPL-3.0.

@@ -51,7 +51,8 @@ partial class PackageViewerForm
     private ToolStripMenuItem _openLogFolderMenuItem = null!;
     private ToolStripMenuItem _copyDiagnosticsMenuItem = null!;
     private ToolStripMenuItem _aboutMenuItem = null!;
-    private ToolStripMenuItem _supportMenuItem = null!;
+    private ToolStripMenuItem _kofiMenuItem = null!;
+    private ToolStripMenuItem _paypalMenuItem = null!;
     private DarkToolStripSeparator _fileSeparator1 = null!;
     private DarkToolStripSeparator _fileSeparator2 = null!;
     private DarkToolStripSeparator _editSeparator = null!;
@@ -271,7 +272,8 @@ partial class PackageViewerForm
         _copyDiagnosticsMenuItem = new ToolStripMenuItem();
         _helpSeparator = new DarkToolStripSeparator();
         _aboutMenuItem = new ToolStripMenuItem();
-        _supportMenuItem = new ToolStripMenuItem();
+        _kofiMenuItem = new ToolStripMenuItem();
+        _paypalMenuItem = new ToolStripMenuItem();
         _menu.SuspendLayout();
 
         _menu.Dock = DockStyle.Top;
@@ -334,10 +336,12 @@ partial class PackageViewerForm
         ConfigureMenuItem(_openLogFolderMenuItem, "Open Log Folder", Keys.None, OnMenuOpenLogFolder);
         ConfigureMenuItem(_copyDiagnosticsMenuItem, "Copy Diagnostic Summary", Keys.None, OnMenuCopyDiagnostics);
         ConfigureMenuItem(_aboutMenuItem, "About", Keys.None, OnMenuAbout);
-        ConfigureMenuItem(_supportMenuItem, "Support development", Keys.None, OnMenuSupport);
+        ConfigureMenuItem(_kofiMenuItem, "Buy me a Ko-fi", Keys.None, OnMenuKofi);
+        ConfigureMenuItem(_paypalMenuItem, "Support via PayPal", Keys.None, OnMenuPaypal);
         _helpMenu.DropDownItems.AddRange(new ToolStripItem[]
         {
-            _openLogFolderMenuItem, _copyDiagnosticsMenuItem, _helpSeparator, _aboutMenuItem, _supportMenuItem
+            _openLogFolderMenuItem, _copyDiagnosticsMenuItem, _helpSeparator,
+            _aboutMenuItem, _kofiMenuItem, _paypalMenuItem
         });
 
         _menu.Items.AddRange(new ToolStripItem[] { _fileMenu, _editMenu, _viewMenu, _toolsMenu, _helpMenu });

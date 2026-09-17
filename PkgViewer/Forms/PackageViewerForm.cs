@@ -1864,15 +1864,18 @@ internal sealed partial class PackageViewerForm : DarkForm
         }
     }
 
-    private static void OpenCoffeeLink()
+    private const string KoFiUrl = "https://ko-fi.com/R6R524N7X";
+    private const string PayPalUrl = "https://www.paypal.com/paypalme/pearlxcoree";
+
+    private void OpenExternalUrl(string url)
     {
         try
         {
-            Process.Start(new ProcessStartInfo("https://ko-fi.com/pearlxcore") { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
         {
-            // Opening the browser is best-effort.
+            DarkMessageBox.ShowError(ex.Message, "Open link");
         }
     }
 
@@ -2238,7 +2241,8 @@ internal sealed partial class PackageViewerForm : DarkForm
     private void OnMenuOpenLogFolder(object? sender, EventArgs e) => OpenLogFolder();
     private void OnMenuCopyDiagnostics(object? sender, EventArgs e) => CopyDiagnostics();
     private void OnMenuAbout(object? sender, EventArgs e) => new AboutForm().ShowDialog(this);
-    private void OnMenuSupport(object? sender, EventArgs e) => OpenCoffeeLink();
+    private void OnMenuKofi(object? sender, EventArgs e) => OpenExternalUrl(KoFiUrl);
+    private void OnMenuPaypal(object? sender, EventArgs e) => OpenExternalUrl(PayPalUrl);
 
     /// <summary>Adds the fixed Package Summary rows to the designer-created summary table.</summary>
     private void InitializeOverviewRows()

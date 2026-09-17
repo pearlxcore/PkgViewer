@@ -13,6 +13,7 @@ partial class AboutForm
     private DarkLabel lblVersion = null!;
     private DarkLabel lblCopyright = null!;
     private DarkLabel lblCredits = null!;
+    private DarkLabel lblLicense = null!;
     private DarkButton btnGitHub = null!;
     private DarkButton btnKofi = null!;
     private DarkButton btnPayPal = null!;
@@ -32,6 +33,7 @@ partial class AboutForm
         lblVersion = new DarkLabel();
         lblCopyright = new DarkLabel();
         lblCredits = new DarkLabel();
+        lblLicense = new DarkLabel();
         btnGitHub = new DarkButton();
         btnKofi = new DarkButton();
         btnPayPal = new DarkButton();
@@ -69,6 +71,12 @@ partial class AboutForm
         lblCredits.Size = new Size(380, 46);
         lblCredits.Text = "Credit to Robin Perris, SvenGDK, PSBrew, Renan Barreto,\r\nkerrdec97, strongt1me, Sony";
 
+        lblLicense.Font = new Font("Segoe UI", 9F);
+        lblLicense.Location = new Point(20, 152);
+        lblLicense.Name = "lblLicense";
+        lblLicense.Size = new Size(380, 20);
+        lblLicense.Text = "Licensed under the GNU General Public License v3.0";
+
         btnGitHub.Font = new Font("Segoe UI", 9F);
         btnGitHub.Location = new Point(20, 182);
         btnGitHub.Name = "btnGitHub";
@@ -104,6 +112,7 @@ partial class AboutForm
         Controls.Add(btnPayPal);
         Controls.Add(btnKofi);
         Controls.Add(btnGitHub);
+        Controls.Add(lblLicense);
         Controls.Add(lblCredits);
         Controls.Add(lblCopyright);
         Controls.Add(lblVersion);

@@ -1,6 +1,6 @@
 # Pkg Viewer
 
-A quick little viewer for PS4 and PS5 packages. Open a package or an image, poke around inside, preview files, and grab what you need — without opening the full PS4/PS5 PKG Tool.
+A quick little viewer for PS4 and PS5 packages. Open a package or an image, poke around inside, preview files, and grab what you need - without opening the full PS4/PS5 PKG Tool.
 
 **This is not software for obtaining free PS4/PS5 games.**
 
@@ -16,7 +16,7 @@ A quick little viewer for PS4 and PS5 packages. Open a package or an image, poke
 
 - Windows 10 or 11 (64-bit).
 
-The release is a single `PkgViewer.exe` with everything it needs bundled in — no .NET install.
+The release is a single `PkgViewer.exe` with everything it needs bundled in - no .NET install.
 
 # Features
 
@@ -32,7 +32,7 @@ The release is a single `PkgViewer.exe` with everything it needs bundled in — 
 
 # How To Use
 
-1. Run `PkgViewer.exe` and pick a package or image — or just drag one onto the window.
+1. Run `PkgViewer.exe` and pick a package or image - or just drag one onto the window.
 2. Walk the tabs: **Overview**, **Package**, **Activities**/**Executable** (PS5), **Trophies**, **File Browser**, **Artwork**.
 3. In **File Browser**, double-click a file to preview it, or right-click to copy, reveal or extract.
 4. Use **File > Extract All...** to pull out everything.

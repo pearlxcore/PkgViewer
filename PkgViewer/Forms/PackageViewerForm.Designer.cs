@@ -72,6 +72,9 @@ partial class PackageViewerForm
     private readonly DarkListView _fileList = new();
     private readonly ImageList _fileIcons = FileIcons.Create();
     private readonly DarkContextMenu _fileContextMenu = new();
+    private readonly DarkContextMenu _fileTreeContextMenu = new();
+    private ToolStripMenuItem? _treePreviewMenuItem;
+    private ToolStripMenuItem? _treeExtractMenuItem;
     private readonly DarkLabel _fileBreadcrumb = new() { Text = "Package root" };
     private readonly DarkButton _upButton = new() { Text = "Up" };
     private readonly DarkButton _extractSelectedButton = new() { Text = "Extract Selected..." };
@@ -515,6 +518,9 @@ partial class PackageViewerForm
         _fileTree.ShowPlusMinus = true;
         _fileTree.ShowRootLines = true;
         _fileTree.AfterSelect += (_, _) => OnFileTreeNodeSelected();
+        _fileTree.NodeMouseClick += OnFileTreeNodeMouseClick;
+        _fileTree.ItemDrag += OnFilesItemDrag;
+        _fileTree.ContextMenuStrip = _fileTreeContextMenu;
 
         _fileList.View = View.Details;
         _fileList.FullRowSelect = true;
@@ -527,10 +533,12 @@ partial class PackageViewerForm
         _fileList.MouseClick += OnFileListMouseClick;
         _fileList.SelectedIndexChanged += (_, _) => UpdateFileActionState();
         _fileList.KeyDown += OnFileListKeyDown;
+        _fileList.ItemDrag += OnFilesItemDrag;
 
         _fileTree.ImageList = _fileIcons;
         _fileList.SmallImageList = _fileIcons;
         BuildFileContextMenu();
+        BuildFileTreeContextMenu();
 
         _previewInfo.Dock = DockStyle.Top;
         _previewInfo.AutoEllipsis = true;
@@ -707,6 +715,36 @@ partial class PackageViewerForm
         _fileContextMenu.Items.Add(MenuItem("Open containing folder", OpenContainingFolder));
         _fileContextMenu.Items.Add(MenuItem("Copy path", CopySelectedPath));
         _fileContextMenu.Items.Add(MenuItem("Copy filename", CopySelectedName));
+    }
+
+    /// <summary>
+    /// The folder-tree context menu, mirroring PS5 PKG Tool: preview/extract plus expand/collapse and
+    /// copy actions.
+    /// </summary>
+    private void BuildFileTreeContextMenu()
+    {
+        _treePreviewMenuItem = MenuItem("Preview", PreviewTreeNode);
+        _treeExtractMenuItem = MenuItem("Extract...", () => _ = ExtractTreeSelectionAsync());
+        _fileTreeContextMenu.Items.Add(_treePreviewMenuItem);
+        _fileTreeContextMenu.Items.Add(_treeExtractMenuItem);
+        _fileTreeContextMenu.Items.Add(new DarkToolStripSeparator());
+        _fileTreeContextMenu.Items.Add(MenuItem("Expand", () => _fileTree.SelectedNode?.Expand()));
+        _fileTreeContextMenu.Items.Add(MenuItem("Collapse", () => _fileTree.SelectedNode?.Collapse()));
+        _fileTreeContextMenu.Items.Add(MenuItem("Expand all", () => _fileTree.ExpandAll()));
+        _fileTreeContextMenu.Items.Add(MenuItem("Collapse all", () => _fileTree.CollapseAll()));
+        _fileTreeContextMenu.Items.Add(new DarkToolStripSeparator());
+        _fileTreeContextMenu.Items.Add(MenuItem("Copy path", CopySelectedTreePath));
+        _fileTreeContextMenu.Items.Add(MenuItem("Copy name", CopySelectedTreeName));
+        _fileTreeContextMenu.Opening += OnFileTreeContextOpening;
+    }
+
+    private void OnFileTreeContextOpening(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        TreeNode? node = _fileTree.SelectedNode;
+        bool isFile = node?.Tag is PackageFileNode { IsDirectory: false };
+        bool hasFiles = node?.Tag is PackageFileNode model && (model.IsDirectory ? node.Nodes.Count > 0 : true);
+        if (_treePreviewMenuItem is not null) _treePreviewMenuItem.Enabled = isFile && !_busy;
+        if (_treeExtractMenuItem is not null) _treeExtractMenuItem.Enabled = hasFiles && !_busy;
     }
 
     protected override void Dispose(bool disposing)

@@ -1011,10 +1011,14 @@ internal sealed partial class PackageViewerForm : DarkForm
     // Extraction
     // ------------------------------------------------------------------
 
-    private async Task ExtractSelectedAsync()
-    {
-        if (_busy || _session is null) return;
+    private Task ExtractSelectedAsync() =>
+        ExtractPathsAsync(SelectedListFilePaths(), "Select one or more files or folders to extract.");
 
+    private Task ExtractTreeSelectionAsync() =>
+        ExtractPathsAsync(SelectedTreeFilePaths(), "Select a file or folder in the tree to extract.");
+
+    private List<string> SelectedListFilePaths()
+    {
         var paths = new List<string>();
         foreach (ListViewItem item in _fileList.SelectedItems)
         {
@@ -1023,10 +1027,26 @@ internal sealed partial class PackageViewerForm : DarkForm
             if (model.IsDirectory) paths.AddRange(CollectFilePaths(node));
             else paths.Add(model.FullPath);
         }
-        paths = paths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return paths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private List<string> SelectedTreeFilePaths()
+    {
+        var paths = new List<string>();
+        if (_fileTree.SelectedNode is { } node && node.Tag is PackageFileNode model)
+        {
+            if (model.IsDirectory) paths.AddRange(CollectFilePaths(node));
+            else paths.Add(model.FullPath);
+        }
+        return paths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private async Task ExtractPathsAsync(IReadOnlyList<string> paths, string emptyMessage)
+    {
+        if (_busy || _session is null) return;
         if (paths.Count == 0)
         {
-            DarkMessageBox.ShowWarning("Select one or more files or folders to extract.", "PkgViewer");
+            DarkMessageBox.ShowWarning(emptyMessage, "PkgViewer");
             return;
         }
 
@@ -1281,6 +1301,76 @@ internal sealed partial class PackageViewerForm : DarkForm
         _statusState.Text = "Stopping extraction (the current file completes, then it stops)...";
     }
 
+    /// <summary>
+    /// Drag-out extraction: the selected entries (or everything under a folder) are extracted to a
+    /// temporary folder, then offered as a file drop so they can be dropped into Explorer.
+    /// </summary>
+    private async void OnFilesItemDrag(object? sender, ItemDragEventArgs e)
+    {
+        if (_busy || _session is null) return;
+        List<string> paths = ReferenceEquals(sender, _fileTree) ? SelectedTreeFilePaths() : SelectedListFilePaths();
+        if (paths.Count == 0) return;
+
+        Control source = sender as Control ?? _fileList;
+        string dragRoot = Path.Combine(Path.GetTempPath(), "PkgViewer", "Drag", Guid.NewGuid().ToString("N"));
+        _dragRoots.Add(dragRoot);
+        Directory.CreateDirectory(dragRoot);
+
+        var extracted = new List<string>();
+        _statusState.Text = $"Preparing {paths.Count:N0} file(s) for drag...";
+        try
+        {
+            foreach (string relative in paths)
+            {
+                _lifetimeCancellation.Token.ThrowIfCancellationRequested();
+                try
+                {
+                    PackageExtractionResult result = await _session.ExtractAsync(
+                        new PackageExtractionRequest(relative, dragRoot, PackageConflictPolicy.Replace),
+                        null, _lifetimeCancellation.Token);
+                    if (result.Outcome != PackageExtractionOutcome.Failed)
+                        extracted.Add(result.DestinationPath);
+                }
+                catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or NotSupportedException)
+                {
+                    // Skip unreadable entries; the rest can still be dragged.
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            if (!_closing) _statusState.Text = "Ready";
+        }
+
+        if (extracted.Count == 0 || _closing) return;
+        try
+        {
+            source.DoDragDrop(new DataObject(DataFormats.FileDrop, extracted.ToArray()), DragDropEffects.Copy);
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    private readonly List<string> _dragRoots = [];
+
+    private void CleanupDragRoots()
+    {
+        foreach (string root in _dragRoots)
+        {
+            try
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+        _dragRoots.Clear();
+    }
+
     // ------------------------------------------------------------------
     // Menu actions
     // ------------------------------------------------------------------
@@ -1447,6 +1537,28 @@ internal sealed partial class PackageViewerForm : DarkForm
         if (!string.IsNullOrEmpty(_fileFilter.SearchText)) _fileFilter.SearchText = string.Empty;
         _fileTree.SelectedNode = folder;
         folder.EnsureVisible();
+    }
+
+    private void OnFileTreeNodeMouseClick(object? sender, TreeNodeMouseClickEventArgs e)
+    {
+        if (e.Button == MouseButtons.Right && e.Node is not null)
+            _fileTree.SelectedNode = e.Node;
+    }
+
+    private void PreviewTreeNode()
+    {
+        if (_fileTree.SelectedNode?.Tag is PackageFileNode { IsDirectory: false } model)
+            _ = PreviewFileAsync(model.FullPath, model.Size);
+    }
+
+    private void CopySelectedTreePath()
+    {
+        if (_fileTree.SelectedNode?.Tag is PackageFileNode model) CopyToClipboard(model.FullPath, "Path");
+    }
+
+    private void CopySelectedTreeName()
+    {
+        if (_fileTree.SelectedNode is { } node && node != _fileRootNode) CopyToClipboard(node.Text, "Name");
     }
 
     private void TogglePreviewPane()
@@ -1837,6 +1949,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         _lifetimeCancellation.Cancel();
         _previewCancellation?.Cancel();
         CaptureFileLayout();
+        CleanupDragRoots();
         ReleaseResources();
     }
 

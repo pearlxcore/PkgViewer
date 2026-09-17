@@ -358,6 +358,7 @@ partial class PackageViewerForm
         _statusStrip.SuspendLayout();
 
         _statusStrip.Font = new Font("Segoe UI", 8.25F);
+        _statusStrip.Padding = new Padding(0, 4, 0, 4);
         _statusPath.Spring = true;
         _statusPath.TextAlign = ContentAlignment.MiddleLeft;
         _statusPath.Text = string.Empty;
@@ -414,7 +415,7 @@ partial class PackageViewerForm
 
         // ---------------- Form ----------------
         AutoScaleMode = AutoScaleMode.Font;
-        Text = "PkgViewer";
+        Text = "Pkg Viewer";
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         MinimizeBox = true;
@@ -845,6 +846,7 @@ partial class PackageViewerForm
         _fileTree.ShowPlusMinus = true;
         _fileTree.ShowRootLines = true;
         _fileTree.ImageList = _fileIcons;
+        _fileTree.Dock = DockStyle.Fill;
         _fileTree.AfterSelect += OnFileTreeAfterSelect;
         _fileTree.NodeMouseClick += OnFileTreeNodeMouseClick;
         _fileTree.ItemDrag += OnFilesItemDrag;
@@ -853,6 +855,7 @@ partial class PackageViewerForm
         _fileList.FullRowSelect = true;
         _fileList.MultiSelect = true;
         _fileList.SmallImageList = _fileIcons;
+        _fileList.Dock = DockStyle.Fill;
         _fileList.Columns.Add("Name", 220);
         _fileList.Columns.Add("Type", 100);
         _fileList.Columns.Add("Path", 260);

@@ -1,45 +1,42 @@
-using System.Reflection;
-using DarkUI.Controls;
-using DarkUI.Forms;
+using System.Diagnostics;
 
 namespace PkgViewer.Forms;
 
-internal sealed class AboutForm : DarkForm
+/// <summary>About window mirroring PS5 PKG Tool: icon, identity, credits and support links.</summary>
+internal sealed partial class AboutForm : DarkUI.Forms.DarkForm
 {
-    public AboutForm()
+    private const string GitHubUrl = "https://github.com/pearlxcore";
+    private const string KoFiUrl = "https://ko-fi.com/R6R524N7X";
+    private const string PayPalUrl = "https://www.paypal.com/paypalme/pearlxcoree";
+
+    public AboutForm(string version)
     {
+        InitializeComponent();
         AppIcon.Apply(this);
-        Text = "About PkgViewer";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        StartPosition = FormStartPosition.CenterParent;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        ShowInTaskbar = false;
-        ClientSize = new Size(420, 170);
-
-        string version = Assembly.GetEntryAssembly()
-            ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-            ?? Assembly.GetEntryAssembly()?.GetName().Version?.ToString()
-            ?? "1.0.0";
-
-        var title = new DarkLabel
+        lblVersion.Text = "Version " + version;
+        if (AppIcon.Load() is { } icon)
         {
-            Text = "PkgViewer",
-            Font = new Font("Segoe UI", 14F, FontStyle.Bold),
-            Location = new Point(20, 18),
-            AutoSize = true
-        };
-        var versionLabel = new DarkLabel { Text = "Version " + version, Location = new Point(22, 54), AutoSize = true };
-        var description = new DarkLabel
-        {
-            Text = "Quick viewer for PS4 and PS5 packages.\nSupports .pkg, .ffpfsc, .ffpkg and .exfat.",
-            Location = new Point(22, 80),
-            Size = new Size(376, 44)
-        };
-        var ok = new DarkButton { Text = "OK", Location = new Point(318, 128), Size = new Size(80, 28) };
-        ok.Click += (_, _) => Close();
-        AcceptButton = ok;
+            using var sized = new Icon(icon, new Size(64, 64));
+            picAppIcon.Image = sized.ToBitmap();
+        }
+    }
 
-        Controls.AddRange([title, versionLabel, description, ok]);
+    private void btnGitHub_Click(object? sender, EventArgs e) => Open(GitHubUrl);
+
+    private void btnKofi_Click(object? sender, EventArgs e) => Open(KoFiUrl);
+
+    private void btnPayPal_Click(object? sender, EventArgs e) => Open(PayPalUrl);
+
+    private void btnClose_Click(object? sender, EventArgs e) => Close();
+
+    private static void Open(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
+        {
+        }
     }
 }

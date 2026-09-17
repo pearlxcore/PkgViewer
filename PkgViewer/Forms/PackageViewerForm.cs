@@ -128,7 +128,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         PackageInfo info = _session.Info;
         string displayTitle = string.IsNullOrWhiteSpace(info.Title) ? info.FileName : info.Title;
 
-        Text = displayTitle + " - PkgViewer";
+        Text = "Pkg Viewer - " + displayTitle;
         _titleLabel.Text = displayTitle + TitleSuffix(info);
         _subtitleLabel.Text = string.Join("  •  ", new[]
         {
@@ -2240,7 +2240,15 @@ internal sealed partial class PackageViewerForm : DarkForm
     private void OnMenuRemoveLegacy(object? sender, EventArgs e) => RemoveLegacyIntegration();
     private void OnMenuOpenLogFolder(object? sender, EventArgs e) => OpenLogFolder();
     private void OnMenuCopyDiagnostics(object? sender, EventArgs e) => CopyDiagnostics();
-    private void OnMenuAbout(object? sender, EventArgs e) => new AboutForm().ShowDialog(this);
+    private void OnMenuAbout(object? sender, EventArgs e) => new AboutForm(AppVersion()).ShowDialog(this);
+
+    /// <summary>The assembly version shown on the About window (e.g. "1.0.0").</summary>
+    private static string AppVersion()
+    {
+        Version? version = typeof(PackageViewerForm).Assembly.GetName().Version;
+        if (version is null) return "1.0.0";
+        return version.Build >= 0 ? $"{version.Major}.{version.Minor}.{version.Build}" : $"{version.Major}.{version.Minor}";
+    }
     private void OnMenuKofi(object? sender, EventArgs e) => OpenExternalUrl(KoFiUrl);
     private void OnMenuPaypal(object? sender, EventArgs e) => OpenExternalUrl(PayPalUrl);
 

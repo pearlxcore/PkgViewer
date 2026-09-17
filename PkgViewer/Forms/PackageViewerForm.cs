@@ -25,6 +25,7 @@ internal sealed partial class PackageViewerForm : DarkForm
     private const int MaximumTextBytes = 1024 * 1024;
     private const int MaximumHexBytes = 16 * 1024;
     private const int MaximumFileItems = 20000;
+    private const long MaximumDecodedPixels = 4096L * 4096L;
 
     private readonly AppSettings _settings = AppSettings.Load();
     private readonly PackageOpenService _openService = new();
@@ -133,6 +134,8 @@ internal sealed partial class PackageViewerForm : DarkForm
             SizeText(info)
         }.Where(part => !string.IsNullOrWhiteSpace(part)));
         _contentIdLabel.Text = info.ContentId;
+        _toolTip.SetToolTip(_titleLabel, displayTitle);
+        _toolTip.SetToolTip(_contentIdLabel, info.ContentId);
         SetImage(_iconBox, _session.Artwork.Icon);
         PopulateArtwork();
 
@@ -145,6 +148,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         SetOverviewValue("Package version", info.PackageVersion);
         SetOverviewValue("Required firmware", info.RequiredFirmware);
         SetOverviewValue("Package size", SizeText(info));
+        AppendOverviewExtras(info.ExtraRows);
 
         _sfoGrid.Rows.Clear();
         foreach (PackageSfoEntry entry in _session.SfoEntries)
@@ -153,9 +157,8 @@ internal sealed partial class PackageViewerForm : DarkForm
         PopulateInspectionGrid(_headerGrid, _session.HeaderFields, "Header information");
         PopulateInspectionGrid(_buildGrid, _session.BuildInfoFields, "PUBTOOLINFO");
 
-        _entriesGrid.Rows.Clear();
-        foreach (PackageEntryRecord entry in _session.EntryRecords)
-            _entriesGrid.Rows.Add(entry.Name, entry.Offset, entry.Size, entry.Flags1, entry.Flags2, entry.Encrypted);
+        _entryRecords = _session.EntryRecords.ToList();
+        PopulateEntriesGrid();
 
         _allFiles = [];
         _filesLoaded = false;
@@ -396,6 +399,40 @@ internal sealed partial class PackageViewerForm : DarkForm
         SetArtworkSlot(_pic0Box, _pic0Empty, artwork.Pic0);
         SetArtworkSlot(_pic1Box, _pic1Empty, artwork.Pic1);
         SetArtworkSlot(_pic2Box, _pic2Empty, artwork.Pic2);
+        _toolTip.SetToolTip(_iconArtBox, DescribeArtwork("ICON", _iconArtBox, artwork.Icon));
+        _toolTip.SetToolTip(_pic0Box, DescribeArtwork("PIC0", _pic0Box, artwork.Pic0));
+        _toolTip.SetToolTip(_pic1Box, DescribeArtwork("PIC1", _pic1Box, artwork.Pic1));
+        _toolTip.SetToolTip(_pic2Box, DescribeArtwork("PIC2", _pic2Box, artwork.Pic2));
+    }
+
+    private static string DescribeArtwork(string slot, PictureBox box, PackageImage? image)
+    {
+        if (image is null || image.IsEmpty || box.Image is null) return $"{slot}: not present";
+        return $"{slot}: {box.Image.Width}x{box.Image.Height}";
+    }
+
+    private void SaveArtworkSlot(PictureBox box, string slot)
+    {
+        if (box.Image is null)
+        {
+            DarkMessageBox.ShowInformation($"The {slot} image is not present in this package.", "PkgViewer");
+            return;
+        }
+        using var dialog = new SaveFileDialog
+        {
+            Title = $"Save {slot}",
+            Filter = "PNG image (*.png)|*.png",
+            FileName = Path.GetFileNameWithoutExtension(_currentPackagePath) + "_" + slot + ".png"
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            box.Image.Save(dialog.FileName, ImageFormat.Png);
+        }
+        catch (Exception ex) when (ex is IOException or ExternalException or ArgumentException)
+        {
+            DarkMessageBox.ShowError(ex.Message, "Save image");
+        }
     }
 
     private static void SetArtworkSlot(PictureBox box, DarkLabel empty, PackageImage? image)
@@ -406,8 +443,72 @@ internal sealed partial class PackageViewerForm : DarkForm
         empty.Visible = !hasImage;
     }
 
-    private void SetOverviewValue(string key, string value) =>
-        _overviewValues[key].Text = string.IsNullOrWhiteSpace(value) ? "Not available" : value;
+    private const int FixedOverviewRows = 9;
+
+    private void SetOverviewValue(string key, string value)
+    {
+        DarkLabel label = _overviewValues[key];
+        label.Text = string.IsNullOrWhiteSpace(value) ? "Not available" : value;
+        _toolTip.SetToolTip(label, label.Text);
+    }
+
+    /// <summary>
+    /// Appends the backend's format-specific fields beneath the fixed nine summary rows, replacing any
+    /// extras from a previously open package. Values are copyable on double-click.
+    /// </summary>
+    private void AppendOverviewExtras(IReadOnlyList<PackageInfoRow> rows)
+    {
+        if (_overviewSummaryTable is not { } table) return;
+        table.SuspendLayout();
+        try
+        {
+            for (int index = table.RowCount - 1; index >= FixedOverviewRows; index--)
+            {
+                for (int column = 0; column < table.ColumnCount; column++)
+                {
+                    Control? control = table.GetControlFromPosition(column, index);
+                    if (control is null) continue;
+                    table.Controls.Remove(control);
+                    control.Dispose();
+                }
+                if (index < table.RowStyles.Count) table.RowStyles.RemoveAt(index);
+                table.RowCount = index;
+            }
+
+            foreach (PackageInfoRow row in rows)
+            {
+                int index = table.RowCount;
+                table.RowCount = index + 1;
+                table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+                var caption = new DarkLabel
+                {
+                    Text = row.Label,
+                    Dock = DockStyle.Fill,
+                    Margin = new Padding(3),
+                    TextAlign = ContentAlignment.MiddleLeft
+                };
+                var value = new DarkLabel
+                {
+                    Text = row.Value,
+                    Dock = DockStyle.Fill,
+                    Margin = new Padding(3),
+                    AutoEllipsis = true,
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Cursor = Cursors.Hand
+                };
+                value.DoubleClick += (_, _) => CopyToClipboard(value.Text, row.Label);
+                _toolTip.SetToolTip(value, row.Value);
+
+                table.Controls.Add(caption, 0, index);
+                table.Controls.Add(value, 1, index);
+            }
+        }
+        finally
+        {
+            table.ResumeLayout(true);
+        }
+    }
 
     private static void PopulateInspectionGrid(DarkDataGridView grid, IReadOnlyList<PackageInfoRow> rows, string emptyLabel)
     {
@@ -421,18 +522,20 @@ internal sealed partial class PackageViewerForm : DarkForm
             grid.Rows.Add(row.Label, row.Value);
     }
 
+    private IReadOnlyList<PackageTrophy> _trophies = [];
+
     private void ResetTrophyState()
     {
         foreach (Image image in _trophyImages) image.Dispose();
         _trophyImages.Clear();
+        _trophies = [];
         _trophyGrid.Rows.Clear();
         _trophyState.Text = "Trophy information loads when this page is selected.";
     }
 
     private void PopulateTrophies(IReadOnlyList<PackageTrophy> trophies)
     {
-        foreach (Image image in _trophyImages) image.Dispose();
-        _trophyImages.Clear();
+        _trophies = trophies;
         _trophyGrid.Rows.Clear();
         if (_session is null) return;
 
@@ -444,8 +547,23 @@ internal sealed partial class PackageViewerForm : DarkForm
             return;
         }
 
-        foreach (PackageTrophy trophy in trophies)
+        _trophyState.Text = BuildTrophySummary(trophies);
+        ApplyTrophyFilter();
+    }
+
+    /// <summary>Rebuilds the trophy rows for the current filter query.</summary>
+    private void ApplyTrophyFilter()
+    {
+        foreach (Image image in _trophyImages) image.Dispose();
+        _trophyImages.Clear();
+        _trophyGrid.Rows.Clear();
+        if (_trophies.Count == 0) return;
+
+        string query = _trophyFilter.SearchText.Trim();
+        int shown = 0;
+        foreach (PackageTrophy trophy in _trophies)
         {
+            if (query.Length > 0 && !MatchesTrophy(trophy, query)) continue;
             Image? icon = ToBitmap(trophy.Icon);
             if (icon is not null) _trophyImages.Add(icon);
             _trophyGrid.Rows.Add(new object?[]
@@ -453,9 +571,19 @@ internal sealed partial class PackageViewerForm : DarkForm
                 icon, trophy.Id.ToString("000"), trophy.Name, trophy.Description, trophy.Grade,
                 trophy.Hidden ? "Yes" : "No"
             });
+            shown++;
         }
-        _trophyState.Text = BuildTrophySummary(trophies);
+
+        if (query.Length > 0)
+            _trophyState.Text = $"{shown:N0} of {_trophies.Count:N0} trophies match '{query}'.";
+        else
+            _trophyState.Text = BuildTrophySummary(_trophies);
     }
+
+    private static bool MatchesTrophy(PackageTrophy trophy, string query) =>
+        trophy.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+        trophy.Description.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+        trophy.Grade.Contains(query, StringComparison.OrdinalIgnoreCase);
 
     private static string BuildTrophySummary(IReadOnlyList<PackageTrophy> trophies)
     {
@@ -836,27 +964,67 @@ internal sealed partial class PackageViewerForm : DarkForm
             stream.CopyTo(memory);
             memory.Position = 0;
             using Image source = Image.FromStream(memory, useEmbeddedColorManagement: false, validateImageData: true);
+            if ((long)source.Width * source.Height > MaximumDecodedPixels)
+                return new PreviewResult(null, null,
+                    $"The image is too large to decode ({source.Width}x{source.Height}). Use Extract.");
             return new PreviewResult(new Bitmap(source), null, null);
         }
 
         if (extension == ".dds")
         {
             (byte[] rgba, int width, int height) = Ps5ImageCodec.DecodeDdsToRgba(stream);
+            if ((long)width * height > MaximumDecodedPixels)
+                return new PreviewResult(null, null,
+                    $"The image is too large to decode ({width}x{height}). Use Extract.");
             return new PreviewResult(BitmapFromRgba(rgba, width, height), null, null);
         }
 
         byte[] buffer = ReadAtMost(stream, MaximumTextBytes);
         token.ThrowIfCancellationRequested();
-        if (!ContainsNullByte(buffer))
+        if (IsProbablyText(buffer, out Encoding encoding))
         {
-            string text = Encoding.UTF8.GetString(buffer);
+            string text = encoding.GetString(buffer);
             if (size > buffer.Length)
-                text += Environment.NewLine + $"... truncated ({FormatByteSize(size)} total)";
+                text += Environment.NewLine +
+                    $"... [truncated: showing the first {FormatByteSize(buffer.Length)} of {FormatByteSize(size)}]";
             return new PreviewResult(null, text, null);
         }
 
         int hexLength = Math.Min(buffer.Length, MaximumHexBytes);
-        return new PreviewResult(null, BuildHexDump(buffer[..hexLength]), null);
+        string header = size > hexLength
+            ? $"[hex preview: first {FormatByteSize(hexLength)} of {FormatByteSize(size)}]{Environment.NewLine}"
+            : string.Empty;
+        return new PreviewResult(null, header + BuildHexDump(buffer[..hexLength]), null);
+    }
+
+    /// <summary>
+    /// Best-effort text detection. Recognises a UTF-8/UTF-16 byte-order mark, then falls back to a
+    /// null-byte distribution heuristic so UTF-16 text is not mistaken for binary.
+    /// </summary>
+    private static bool IsProbablyText(byte[] buffer, out Encoding encoding)
+    {
+        encoding = Encoding.UTF8;
+        if (buffer.Length == 0) return true;
+        if (buffer.Length >= 3 && buffer[0] == 0xEF && buffer[1] == 0xBB && buffer[2] == 0xBF) return true;
+        if (buffer.Length >= 2 && buffer[0] == 0xFF && buffer[1] == 0xFE) { encoding = Encoding.Unicode; return true; }
+        if (buffer.Length >= 2 && buffer[0] == 0xFE && buffer[1] == 0xFF) { encoding = Encoding.BigEndianUnicode; return true; }
+
+        int limit = Math.Min(buffer.Length, 4096);
+        int nulls = 0, oddNulls = 0, evenNulls = 0;
+        for (int index = 0; index < limit; index++)
+        {
+            if (buffer[index] != 0) continue;
+            nulls++;
+            if ((index & 1) == 0) evenNulls++;
+            else oddNulls++;
+        }
+        if (nulls == 0) return true;
+        if (nulls > limit * 0.1 && (oddNulls > limit * 0.3 || evenNulls > limit * 0.3))
+        {
+            encoding = oddNulls >= evenNulls ? Encoding.Unicode : Encoding.BigEndianUnicode;
+            return true;
+        }
+        return false;
     }
 
     // ------------------------------------------------------------------
@@ -1137,6 +1305,91 @@ internal sealed partial class PackageViewerForm : DarkForm
     // Menu actions
     // ------------------------------------------------------------------
 
+    private List<PackageEntryRecord> _entryRecords = [];
+    private string _entriesSortColumn = string.Empty;
+    private bool _entriesSortAscending = true;
+
+    private void OnEntriesColumnHeaderClick(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        if (e.ColumnIndex < 0 || e.ColumnIndex >= _entriesGrid.Columns.Count) return;
+        string column = _entriesGrid.Columns[e.ColumnIndex].HeaderText;
+        if (string.Equals(_entriesSortColumn, column, StringComparison.Ordinal))
+            _entriesSortAscending = !_entriesSortAscending;
+        else
+        {
+            _entriesSortColumn = column;
+            _entriesSortAscending = true;
+        }
+        PopulateEntriesGrid();
+    }
+
+    private void PopulateEntriesGrid()
+    {
+        IEnumerable<PackageEntryRecord> ordered = _entriesSortColumn switch
+        {
+            "Offset" => OrderBy(_entriesSortAscending, _entryRecords, entry => ParseOffsetValue(entry.Offset)),
+            "Size" => OrderBy(_entriesSortAscending, _entryRecords, entry => ParseSizeText(entry.Size)),
+            "Name" => OrderBy(_entriesSortAscending, _entryRecords, entry => entry.Name),
+            _ => _entryRecords
+        };
+
+        _entriesGrid.Rows.Clear();
+        foreach (PackageEntryRecord entry in ordered)
+            _entriesGrid.Rows.Add(entry.Name, entry.Offset, entry.Size, entry.Flags1, entry.Flags2, entry.Encrypted);
+    }
+
+    private static IEnumerable<T> OrderBy<T, TKey>(bool ascending, IEnumerable<T> source, Func<T, TKey> selector) =>
+        ascending ? source.OrderBy(selector) : source.OrderByDescending(selector);
+
+    private static long ParseOffsetValue(string value)
+    {
+        string text = value.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? value[2..] : value;
+        return long.TryParse(text, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out long parsed)
+            ? parsed
+            : 0;
+    }
+
+    private static long ParseSizeText(string value)
+    {
+        string[] parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2 ||
+            !double.TryParse(parts[0], System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out double amount))
+            return 0;
+        double scale = parts[1].ToUpperInvariant() switch
+        {
+            "BYTES" => 1d,
+            "KB" => 1024d,
+            "MB" => 1024d * 1024,
+            "GB" => 1024d * 1024 * 1024,
+            "TB" => 1024d * 1024 * 1024 * 1024,
+            _ => 0d
+        };
+        return scale > 0 ? (long)(amount * scale) : 0;
+    }
+
+    private void AttachGridCopyMenu(DarkDataGridView grid)
+    {
+        var menu = new DarkContextMenu();
+        menu.Items.Add(MenuItem("Copy value", () => CopyGridValue(grid)));
+        menu.Items.Add(MenuItem("Copy row", () => CopyGridRow(grid)));
+        grid.CellContextMenuStripNeeded += (_, e) => e.ContextMenuStrip = menu;
+    }
+
+    private void CopyGridValue(DarkDataGridView grid)
+    {
+        if (grid.CurrentCell is { } cell)
+            CopyToClipboard(cell.Value?.ToString(), "Value");
+    }
+
+    private void CopyGridRow(DarkDataGridView grid)
+    {
+        if (grid.CurrentRow is not { } row) return;
+        string text = string.Join("\t", row.Cells.Cast<DataGridViewCell>()
+            .Select(cell => cell.Value?.ToString() ?? string.Empty));
+        CopyToClipboard(text, "Row");
+    }
+
     private void SelectTab(DarkTabPage page)
     {
         if (_tabs.TabPages.Contains(page)) _tabs.SelectedTab = page;
@@ -1157,7 +1410,13 @@ internal sealed partial class PackageViewerForm : DarkForm
             CheckFileExists = true
         };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        _currentPackagePath = Path.GetFullPath(dialog.FileName);
+        OpenDroppedFile(dialog.FileName);
+    }
+
+    private void OpenDroppedFile(string path)
+    {
+        if (!File.Exists(path)) return;
+        _currentPackagePath = Path.GetFullPath(path);
         _passcode = null;
         _statusPath.Text = _currentPackagePath;
         _ = LoadPackageAsync();

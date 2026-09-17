@@ -49,6 +49,8 @@ partial class PackageViewerForm
     private readonly Dictionary<string, DarkLabel> _overviewValues = new();
     private readonly DarkDataGridView _sfoGrid = new();
     private TableLayoutPanel? _overviewLayout;
+    private TableLayoutPanel? _overviewSummaryTable;
+    private readonly ToolTip _toolTip = new();
 
     // PKG Internals
     private readonly DarkTabControl _packageTabs = new();
@@ -62,6 +64,7 @@ partial class PackageViewerForm
     // Trophy
     private readonly DarkDataGridView _trophyGrid = new();
     private readonly DarkLabel _trophyState = new() { Text = "Trophy information loads when this page is selected." };
+    private readonly DarkSearchBox _trophyFilter = new() { Placeholder = "Filter trophies by name, description or type" };
 
     // File browser
     private readonly DarkSearchBox _fileFilter = new() { Placeholder = "Filter filename here" };
@@ -123,6 +126,7 @@ partial class PackageViewerForm
         BuildHeader();
         BuildTabs();
         BuildStatus();
+        EnableDragDrop();
 
         Controls.Add(_tabs);
         Controls.Add(_headerPanel);
@@ -206,6 +210,28 @@ partial class PackageViewerForm
         MainMenuStrip = _menu;
     }
 
+    private void EnableDragDrop()
+    {
+        AllowDrop = true;
+        _tabs.AllowDrop = true;
+        DragEnter += OnDragEnterPackage;
+        DragDrop += OnDragDropPackage;
+        _tabs.DragEnter += OnDragEnterPackage;
+        _tabs.DragDrop += OnDragDropPackage;
+    }
+
+    private void OnDragEnterPackage(object? sender, DragEventArgs e)
+    {
+        if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true)
+            e.Effect = DragDropEffects.Copy;
+    }
+
+    private void OnDragDropPackage(object? sender, DragEventArgs e)
+    {
+        if (e.Data?.GetData(DataFormats.FileDrop) is string[] { Length: > 0 } files)
+            OpenDroppedFile(files[0]);
+    }
+
     private static ToolStripMenuItem MenuItem(string text, Action action, Keys shortcut = Keys.None)
     {
         var item = new ToolStripMenuItem(text) { ForeColor = Color.FromArgb(220, 220, 220) };
@@ -231,8 +257,12 @@ partial class PackageViewerForm
 
         _titleLabel.Text = "PKG Viewer";
         _titleLabel.Font = new Font("Segoe UI", 16F, FontStyle.Bold);
+        _titleLabel.AutoEllipsis = true;
+        _titleLabel.Cursor = Cursors.Hand;
+        _titleLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _titleLabel.Location = new Point(118, 12);
-        _titleLabel.Size = new Size(636, 27);
+        _titleLabel.Size = new Size(680, 27);
+        _titleLabel.DoubleClick += (_, _) => CopyToClipboard(_titleLabel.Text, "Title");
 
         _subtitleLabel.Text = "Reading package metadata...";
         _subtitleLabel.AutoEllipsis = true;
@@ -321,12 +351,15 @@ partial class PackageViewerForm
                 Margin = new Padding(3),
                 Font = row == 0 ? new Font("Segoe UI", 9F, FontStyle.Bold) : new Font("Segoe UI", 9F),
                 TextAlign = ContentAlignment.MiddleLeft,
-                AutoEllipsis = true
+                AutoEllipsis = true,
+                Cursor = Cursors.Hand
             };
+            value.DoubleClick += (_, _) => CopyToClipboard(value.Text, "Value");
             _overviewValues[captions[row]] = value;
             table.Controls.Add(caption, 0, row);
             table.Controls.Add(value, 1, row);
         }
+        _overviewSummaryTable = table;
 
         _overviewPanel.Dock = DockStyle.Fill;
         _overviewPanel.Margin = new Padding(0, 0, 6, 0);
@@ -384,6 +417,14 @@ partial class PackageViewerForm
         _entriesGrid.Columns.Add(TextColumn("Flags 1", 14F));
         _entriesGrid.Columns.Add(TextColumn("Flags 2", 14F));
         _entriesGrid.Columns.Add(TextColumn("Encrypted?", 14F));
+        _entriesGrid.Columns["Offset"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        _entriesGrid.Columns["Size"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        _entriesGrid.ColumnHeaderMouseClick += OnEntriesColumnHeaderClick;
+        AttachGridCopyMenu(_entriesGrid);
+        AttachGridCopyMenu(_headerGrid);
+        AttachGridCopyMenu(_buildGrid);
+        AttachGridCopyMenu(_sfoGrid);
+        AttachGridCopyMenu(_trophyGrid);
         _entriesTab.Controls.Add(_entriesGrid);
 
         _packageTabs.TabPages.Add(_headerTab);
@@ -421,8 +462,15 @@ partial class PackageViewerForm
         _trophyState.Padding = new Padding(10, 7, 10, 7);
         _trophyState.TextAlign = ContentAlignment.MiddleLeft;
 
+        _trophyFilter.Dock = DockStyle.Top;
+        _trophyFilter.Height = 30;
+        _trophyFilter.SearchTextChanged += (_, _) => ApplyTrophyFilter();
+
         _trophyTab.Controls.Add(_trophyGrid);
         _trophyTab.Controls.Add(_trophyState);
+        _trophyTab.Controls.Add(_trophyFilter);
+        _trophyState.BringToFront();
+        _trophyFilter.BringToFront();
     }
 
     // ------------------------------------------------------------------
@@ -531,7 +579,18 @@ partial class PackageViewerForm
         BuildArtworkPanel(_pic0Panel, _pic0Empty, _pic0Box);
         BuildArtworkPanel(_pic1Panel, _pic1Empty, _pic1Box);
         BuildArtworkPanel(_pic2Panel, _pic2Empty, _pic2Box);
+        AttachArtworkMenu(_iconArtBox, "ICON");
+        AttachArtworkMenu(_pic0Box, "PIC0");
+        AttachArtworkMenu(_pic1Box, "PIC1");
+        AttachArtworkMenu(_pic2Box, "PIC2");
         _artworkTab.Controls.Add(BuildArtworkLayout(isPs4: true));
+    }
+
+    private void AttachArtworkMenu(PictureBox box, string slot)
+    {
+        var menu = new DarkContextMenu();
+        menu.Items.Add(MenuItem("Save image...", () => SaveArtworkSlot(box, slot)));
+        box.ContextMenuStrip = menu;
     }
 
     /// <summary>PS4 shows PIC0/PIC1; PS5 additionally shows the icon and PIC2 (all with placeholders).</summary>
@@ -606,6 +665,7 @@ partial class PackageViewerForm
 
     private static DataGridViewTextBoxColumn TextColumn(string header, float fillWeight) => new()
     {
+        Name = header,
         HeaderText = header,
         FillWeight = fillWeight,
         ReadOnly = true,

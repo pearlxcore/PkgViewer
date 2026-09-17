@@ -937,11 +937,14 @@ internal sealed partial class PackageViewerForm : DarkForm
         }
     }
 
-    /// <summary>Extensions that are always shown as a hex dump rather than guessed as text.</summary>
-    private static readonly HashSet<string> BinaryPreviewExtensions = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>Extensions rendered as text when they also pass the text heuristic. Everything else —
+    /// including unknown extensions — defaults to a hex dump.</summary>
+    private static readonly HashSet<string> TextPreviewExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".bin", ".self", ".elf", ".prx", ".sprx", ".dll", ".exe", ".so", ".o", ".a",
-        ".pkg", ".at9", ".acb", ".awb", ".sbk", ".sdat", ".edat", ".ag", ".uexp", ".uasset", ".ucas", ".utoc"
+        ".txt", ".text", ".log", ".json", ".xml", ".sfo", ".ini", ".cfg", ".conf", ".csv", ".md",
+        ".yaml", ".yml", ".toml", ".html", ".htm", ".css", ".js", ".ts", ".c", ".h", ".cpp", ".hpp",
+        ".cs", ".py", ".lua", ".sh", ".bat", ".cmd", ".ps1", ".sql", ".resx", ".config", ".strings",
+        ".po", ".srt", ".vtt", ".glsl", ".hlsl", ".frag", ".vert", ".diff", ".patch", ".gitignore"
     };
 
     private PreviewResult BuildPreview(string path, long size, CancellationToken token)
@@ -976,21 +979,12 @@ internal sealed partial class PackageViewerForm : DarkForm
             return new PreviewResult(BitmapFromRgba(rgba, width, height), null, null);
         }
 
-        // Known binary types go straight to a hex dump.
-        if (BinaryPreviewExtensions.Contains(extension))
-        {
-            byte[] binary = ReadAtMost(stream, MaximumHexBytes);
-            string binaryHeader = size > binary.Length
-                ? $"[hex preview: first {FormatByteSize(binary.Length)} of {FormatByteSize(size)}]{Environment.NewLine}"
-                : string.Empty;
-            return new PreviewResult(null, binaryHeader + BuildHexDump(binary), null);
-        }
-
-        // Classify from a small sample first so a binary file is not read up to the full text budget
-        // just to show a 16 KiB hex preview; text files continue reading up to the text budget.
+        // Only known text extensions are rendered as text (and only when they also look like text);
+        // every other extension, including unknown ones, defaults to a hex dump. A small sample is
+        // read first so a binary file is not read up to the full text budget for a 16 KiB hex view.
         byte[] sample = ReadAtMost(stream, MaximumHexBytes);
         token.ThrowIfCancellationRequested();
-        if (IsProbablyText(sample, out Encoding encoding))
+        if (TextPreviewExtensions.Contains(extension) && IsProbablyText(sample, out Encoding encoding))
         {
             byte[] buffer = ReadUpTo(stream, sample, MaximumTextBytes);
             string text = encoding.GetString(buffer);

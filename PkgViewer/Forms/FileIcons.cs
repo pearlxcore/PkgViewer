@@ -29,6 +29,13 @@ internal static class FileIcons
             ImageSize = new Size(16, 16),
             TransparentColor = Color.Transparent
         };
+        Populate(list);
+        return list;
+    }
+
+    /// <summary>Adds the generated icons to an ImageList created by the designer.</summary>
+    public static void Populate(ImageList list)
+    {
         list.Images.Add("folder", DrawFolder(open: false));
         list.Images.Add("document", DrawPage(Color.FromArgb(245, 245, 245), DocumentOverlay));
         list.Images.Add("image", DrawPage(Color.FromArgb(235, 245, 255), ImageOverlay));
@@ -40,7 +47,6 @@ internal static class FileIcons
         list.Images.Add("package", DrawPackage());
         list.Images.Add("video", DrawPage(Color.FromArgb(235, 238, 250), VideoOverlay));
         list.Images.Add("code", DrawPage(Color.FromArgb(235, 245, 235), (g, b) => DrawGlyph(g, b, "<>", Color.FromArgb(40, 120, 60))));
-        return list;
     }
 
     public static int IconFor(string name)

@@ -2,253 +2,202 @@ using System.Drawing;
 using System.Windows.Forms;
 using DarkUI.Controls;
 using DarkUI.Forms;
-using PkgViewer.Core.Models;
 
 namespace PkgViewer.Forms;
 
-// UI construction for PackageViewerForm: control declarations, InitializeComponent and layout.
+// VS-designer-compatible UI construction: every control is declared as a field and created/added
+// directly inside InitializeComponent, with named event handlers defined in PackageViewerForm.cs.
 partial class PackageViewerForm
 {
     private System.ComponentModel.IContainer? components;
 
-    // Header bar
-    private readonly DarkHeaderBar _headerPanel = new() { ShowThemeSelector = false };
-    private readonly PictureBox _iconBox = new();
-    private readonly DarkLabel _titleLabel = new();
-    private readonly DarkLabel _subtitleLabel = new();
-    private readonly DarkLabel _contentIdLabel = new();
+    // Header
+    private DarkHeaderBar _headerPanel = null!;
+    private PictureBox _iconBox = null!;
+    private DarkLabel _titleLabel = null!;
+    private DarkLabel _subtitleLabel = null!;
+    private DarkLabel _contentIdLabel = null!;
 
-    // Menu / status
-    private readonly DarkMenuStrip _menu = new();
-    private readonly DarkStatusStrip _statusStrip = new();
-    private readonly ToolStripStatusLabel _statusPath = new() { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
-    private readonly ToolStripStatusLabel _statusState = new();
-    private readonly ToolStripStatusLabel _statusWarnings = new() { IsLink = true, Visible = false };
-    private readonly DarkToolStripProgressBar _progressBar = new() { Visible = false, Style = ProgressBarStyle.Continuous };
-    private readonly DarkToolStripButton _stopExtractButton = new("Stop Extract") { Visible = false };
+    // Menu
+    private DarkMenuStrip _menu = null!;
+    private ToolStripMenuItem _fileMenu = null!;
+    private ToolStripMenuItem _editMenu = null!;
+    private ToolStripMenuItem _viewMenu = null!;
+    private ToolStripMenuItem _toolsMenu = null!;
+    private ToolStripMenuItem _helpMenu = null!;
+    private ToolStripMenuItem _openMenuItem = null!;
+    private ToolStripMenuItem _closeMenuItem = null!;
+    private ToolStripMenuItem _extractAllMenuItem = null!;
+    private ToolStripMenuItem _saveArtworkMenuItem = null!;
+    private ToolStripMenuItem _exportMetadataMenuItem = null!;
+    private ToolStripMenuItem _openSourceFolderMenuItem = null!;
+    private ToolStripMenuItem _exitMenuItem = null!;
+    private ToolStripMenuItem _copyTitleMenuItem = null!;
+    private ToolStripMenuItem _copyTitleIdMenuItem = null!;
+    private ToolStripMenuItem _copyContentIdMenuItem = null!;
+    private ToolStripMenuItem _copySourcePathMenuItem = null!;
+    private ToolStripMenuItem _findFilesMenuItem = null!;
+    private ToolStripMenuItem _viewOverviewMenuItem = null!;
+    private ToolStripMenuItem _viewFilesMenuItem = null!;
+    private ToolStripMenuItem _viewArtworkMenuItem = null!;
+    private ToolStripMenuItem _viewTrophiesMenuItem = null!;
+    private ToolStripMenuItem _viewInternalsMenuItem = null!;
+    private ToolStripMenuItem _previewPaneMenuItem = null!;
+    private ToolStripMenuItem _resetLayoutMenuItem = null!;
+    private ToolStripMenuItem _retryAccessMenuItem = null!;
+    private ToolStripMenuItem _fileAssociationsMenuItem = null!;
+    private ToolStripMenuItem _advancedMenu = null!;
+    private ToolStripMenuItem _removeLegacyMenuItem = null!;
+    private ToolStripMenuItem _openLogFolderMenuItem = null!;
+    private ToolStripMenuItem _copyDiagnosticsMenuItem = null!;
+    private ToolStripMenuItem _aboutMenuItem = null!;
+    private ToolStripMenuItem _supportMenuItem = null!;
+    private DarkToolStripSeparator _fileSeparator1 = null!;
+    private DarkToolStripSeparator _fileSeparator2 = null!;
+    private DarkToolStripSeparator _editSeparator = null!;
+    private DarkToolStripSeparator _viewSeparator = null!;
+    private DarkToolStripSeparator _toolsSeparator = null!;
+    private DarkToolStripSeparator _helpSeparator = null!;
 
-    // Menu items whose enabled/checked state is updated from the session.
-    private ToolStripMenuItem? _extractAllMenuItem;
-    private ToolStripMenuItem? _retryAccessMenuItem;
-    private ToolStripMenuItem? _previewPaneMenuItem;
-    private ToolStripMenuItem? _exportMetadataMenuItem;
+    // Status
+    private DarkStatusStrip _statusStrip = null!;
+    private ToolStripStatusLabel _statusPath = null!;
+    private ToolStripStatusLabel _statusState = null!;
+    private ToolStripStatusLabel _statusWarnings = null!;
+    private DarkToolStripSeparator _statusSeparator1 = null!;
+    private DarkToolStripSeparator _statusSeparator2 = null!;
+    private DarkToolStripProgressBar _progressBar = null!;
+    private DarkToolStripButton _stopExtractButton = null!;
 
     // Tabs
-    private readonly DarkTabControl _tabs = new();
-    private readonly DarkTabPage _overviewTab = new() { Text = "Overview", Padding = new Padding(12) };
-    private readonly DarkTabPage _packageTab = new() { Text = "PKG Internals", Padding = new Padding(12) };
-    private readonly DarkTabPage _trophyTab = new() { Text = "Trophies", Padding = new Padding(12) };
-    private readonly DarkTabPage _filesTab = new() { Text = "File Browser", Padding = new Padding(12) };
-    private readonly DarkTabPage _artworkTab = new() { Text = "Artwork", Padding = new Padding(12) };
+    private DarkTabControl _tabs = null!;
+    private DarkTabPage _overviewTab = null!;
+    private DarkTabPage _packageTab = null!;
+    private DarkTabPage _trophyTab = null!;
+    private DarkTabPage _filesTab = null!;
+    private DarkTabPage _artworkTab = null!;
 
     // Overview
-    private readonly DarkSectionPanel _overviewPanel = new() { SectionHeader = "Package Summary" };
-    private readonly DarkSectionPanel _sfoPanel = new() { SectionHeader = "PARAM.SFO" };
-    private readonly DarkSectionPanel _paramJsonPanel = new() { SectionHeader = "param.json" };
-    private readonly DarkTreeView _paramJsonTree = new();
-    private readonly Dictionary<string, DarkLabel> _overviewValues = new();
-    private readonly DarkDataGridView _sfoGrid = new();
-    private TableLayoutPanel? _overviewLayout;
-    private TableLayoutPanel? _overviewSummaryTable;
-    private readonly ToolTip _toolTip = new();
+    private TableLayoutPanel _overviewLayout = null!;
+    private DarkSectionPanel _overviewPanel = null!;
+    private Panel _overviewSummaryHost = null!;
+    private TableLayoutPanel _overviewSummaryTable = null!;
+    private DarkSectionPanel _sfoPanel = null!;
+    private DarkDataGridView _sfoGrid = null!;
+    private DataGridViewTextBoxColumn _sfoKeyColumn = null!;
+    private DataGridViewTextBoxColumn _sfoValueColumn = null!;
+    private DarkSectionPanel _paramJsonPanel = null!;
+    private DarkTreeView _paramJsonTree = null!;
+    private Dictionary<string, DarkLabel> _overviewValues = null!;
+    private ToolTip _toolTip = null!;
 
     // PKG Internals
-    private readonly DarkTabControl _packageTabs = new();
-    private readonly DarkTabPage _headerTab = new() { Text = "Header" };
-    private readonly DarkTabPage _buildTab = new() { Text = "Build Info" };
-    private readonly DarkTabPage _entriesTab = new() { Text = "Entries" };
-    private readonly DarkDataGridView _headerGrid = new();
-    private readonly DarkDataGridView _buildGrid = new();
-    private readonly DarkDataGridView _entriesGrid = new();
+    private DarkTabControl _packageTabs = null!;
+    private DarkTabPage _headerTab = null!;
+    private DarkTabPage _buildTab = null!;
+    private DarkTabPage _entriesTab = null!;
+    private DarkDataGridView _headerGrid = null!;
+    private DataGridViewTextBoxColumn _headerFieldColumn = null!;
+    private DataGridViewTextBoxColumn _headerValueColumn = null!;
+    private DarkDataGridView _buildGrid = null!;
+    private DataGridViewTextBoxColumn _buildFieldColumn = null!;
+    private DataGridViewTextBoxColumn _buildValueColumn = null!;
+    private DarkDataGridView _entriesGrid = null!;
+    private DataGridViewTextBoxColumn _entriesNameColumn = null!;
+    private DataGridViewTextBoxColumn _entriesOffsetColumn = null!;
+    private DataGridViewTextBoxColumn _entriesSizeColumn = null!;
+    private DataGridViewTextBoxColumn _entriesFlags1Column = null!;
+    private DataGridViewTextBoxColumn _entriesFlags2Column = null!;
+    private DataGridViewTextBoxColumn _entriesEncryptedColumn = null!;
 
     // Trophy
-    private readonly DarkDataGridView _trophyGrid = new();
-    private readonly DarkLabel _trophyState = new() { Text = "Trophy information loads when this page is selected." };
-    private readonly DarkSearchBox _trophyFilter = new() { Placeholder = "Filter trophies by name, description or type" };
+    private DarkSearchBox _trophyFilter = null!;
+    private DarkLabel _trophyState = null!;
+    private DarkDataGridView _trophyGrid = null!;
+    private DataGridViewImageColumn _trophyIconColumn = null!;
+    private DataGridViewTextBoxColumn _trophyIdColumn = null!;
+    private DataGridViewTextBoxColumn _trophyNameColumn = null!;
+    private DataGridViewTextBoxColumn _trophyDescriptionColumn = null!;
+    private DataGridViewTextBoxColumn _trophyTypeColumn = null!;
+    private DataGridViewTextBoxColumn _trophyHiddenColumn = null!;
 
     // File browser
-    private readonly DarkSearchBox _fileFilter = new() { Placeholder = "Filter filename here" };
-    private readonly DarkTreeView _fileTree = new();
-    private readonly DarkListView _fileList = new();
-    private readonly ImageList _fileIcons = FileIcons.Create();
-    private readonly DarkContextMenu _fileContextMenu = new();
-    private readonly DarkContextMenu _fileTreeContextMenu = new();
-    private ToolStripMenuItem? _treePreviewMenuItem;
-    private ToolStripMenuItem? _treeExtractMenuItem;
-    private readonly DarkLabel _fileBreadcrumb = new() { Text = "Package root" };
-    private readonly DarkButton _upButton = new() { Text = "Up" };
-    private readonly DarkButton _extractSelectedButton = new() { Text = "Extract Selected..." };
-    private readonly DarkButton _extractAllButton = new() { Text = "Extract All..." };
-    private DarkSplitContainer? _filesSplit;
-    private readonly DarkSectionPanel _previewPanel = new() { SectionHeader = "File Preview" };
-    private readonly DarkLabel _previewInfo = new() { Text = "Double-click a file to preview it." };
-    private readonly Panel _previewBody = new() { BackColor = Color.FromArgb(20, 20, 20), Padding = new Padding(1) };
-    private readonly PictureBox _previewImage = new()
-    {
-        SizeMode = PictureBoxSizeMode.Zoom,
-        Visible = false,
-        BackColor = Color.FromArgb(20, 20, 20)
-    };
-    private readonly DarkTextBox _previewText = new()
-    {
-        Multiline = true,
-        ReadOnly = true,
-        ScrollBars = ScrollBars.Both,
-        WordWrap = false,
-        BorderStyle = BorderStyle.None,
-        Font = new Font("Consolas", 9F),
-        Visible = false
-    };
+    private TableLayoutPanel _filesLayout = null!;
+    private TableLayoutPanel _filesToolbar = null!;
+    private DarkLabel _fileBreadcrumb = null!;
+    private DarkButton _upButton = null!;
+    private DarkButton _extractSelectedButton = null!;
+    private DarkButton _extractAllButton = null!;
+    private DarkSearchBox _fileFilter = null!;
+    private DarkSplitContainer _filesSplit = null!;
+    private DarkSplitPane _filesSplitPane1 = null!;
+    private DarkSplitPane _filesSplitPane2 = null!;
+    private DarkSplitPane _filesSplitPane3 = null!;
+    private DarkTreeView _fileTree = null!;
+    private DarkListView _fileList = null!;
+    private ImageList _fileIcons = null!;
+    private DarkContextMenu _fileContextMenu = null!;
+    private ToolStripMenuItem _filePreviewMenuItem = null!;
+    private ToolStripMenuItem _fileExtractMenuItem = null!;
+    private ToolStripMenuItem _fileOpenContainingMenuItem = null!;
+    private ToolStripMenuItem _fileCopyPathMenuItem = null!;
+    private ToolStripMenuItem _fileCopyNameMenuItem = null!;
+    private DarkContextMenu _fileTreeContextMenu = null!;
+    private ToolStripMenuItem _treePreviewMenuItem = null!;
+    private ToolStripMenuItem _treeExtractMenuItem = null!;
+    private ToolStripMenuItem _treeExpandMenuItem = null!;
+    private ToolStripMenuItem _treeCollapseMenuItem = null!;
+    private ToolStripMenuItem _treeExpandAllMenuItem = null!;
+    private ToolStripMenuItem _treeCollapseAllMenuItem = null!;
+    private ToolStripMenuItem _treeCopyPathMenuItem = null!;
+    private ToolStripMenuItem _treeCopyNameMenuItem = null!;
+    private DarkContextMenu _gridContextMenu = null!;
+    private ToolStripMenuItem _gridCopyValueMenuItem = null!;
+    private ToolStripMenuItem _gridCopyRowMenuItem = null!;
+    private DarkSectionPanel _previewPanel = null!;
+    private DarkLabel _previewInfo = null!;
+    private Panel _previewBody = null!;
+    private PictureBox _previewImage = null!;
+    private DarkTextBox _previewText = null!;
 
     // Artwork
-    private readonly DarkSectionPanel _iconPanel = new() { SectionHeader = "ICON" };
-    private readonly DarkSectionPanel _pic0Panel = new() { SectionHeader = "PIC0" };
-    private readonly DarkSectionPanel _pic1Panel = new() { SectionHeader = "PIC1" };
-    private readonly DarkSectionPanel _pic2Panel = new() { SectionHeader = "PIC2" };
-    private readonly DarkLabel _iconEmpty = new() { Text = "No icon image in this package." };
-    private readonly DarkLabel _pic0Empty = new() { Text = "No PIC0 image in this package." };
-    private readonly DarkLabel _pic1Empty = new() { Text = "No PIC1 image in this package." };
-    private readonly DarkLabel _pic2Empty = new() { Text = "No PIC2 image in this package." };
-    private readonly PictureBox _iconArtBox = new() { SizeMode = PictureBoxSizeMode.Zoom, Visible = false };
-    private readonly PictureBox _pic0Box = new() { SizeMode = PictureBoxSizeMode.Zoom, Visible = false };
-    private readonly PictureBox _pic1Box = new() { SizeMode = PictureBoxSizeMode.Zoom, Visible = false };
-    private readonly PictureBox _pic2Box = new() { SizeMode = PictureBoxSizeMode.Zoom, Visible = false };
-    private TableLayoutPanel? _artworkLayout;
+    private TableLayoutPanel _artworkLayout = null!;
+    private DarkSectionPanel _iconPanel = null!;
+    private DarkSectionPanel _pic0Panel = null!;
+    private DarkSectionPanel _pic1Panel = null!;
+    private DarkSectionPanel _pic2Panel = null!;
+    private DarkLabel _iconEmpty = null!;
+    private DarkLabel _pic0Empty = null!;
+    private DarkLabel _pic1Empty = null!;
+    private DarkLabel _pic2Empty = null!;
+    private PictureBox _iconArtBox = null!;
+    private PictureBox _pic0Box = null!;
+    private PictureBox _pic1Box = null!;
+    private PictureBox _pic2Box = null!;
+    private DarkContextMenu _iconArtMenu = null!;
+    private DarkContextMenu _pic0ArtMenu = null!;
+    private DarkContextMenu _pic1ArtMenu = null!;
+    private DarkContextMenu _pic2ArtMenu = null!;
+    private ToolStripMenuItem _iconArtSaveMenuItem = null!;
+    private ToolStripMenuItem _pic0ArtSaveMenuItem = null!;
+    private ToolStripMenuItem _pic1ArtSaveMenuItem = null!;
+    private ToolStripMenuItem _pic2ArtSaveMenuItem = null!;
 
     private void InitializeComponent()
     {
-        Text = "PkgViewer";
-        FormBorderStyle = FormBorderStyle.Sizable;
-        MaximizeBox = true;
-        MinimizeBox = true;
-        MinimumSize = new Size(860, 560);
-        ClientSize = new Size(1100, 680);
-        StartPosition = FormStartPosition.CenterScreen;
+        components = new System.ComponentModel.Container();
+        _toolTip = new ToolTip(components);
 
-        BuildMenu();
-        BuildHeader();
-        BuildTabs();
-        BuildStatus();
-        EnableDragDrop();
+        // ---------------- Header ----------------
+        _headerPanel = new DarkHeaderBar();
+        _iconBox = new PictureBox();
+        _titleLabel = new DarkLabel();
+        _subtitleLabel = new DarkLabel();
+        _contentIdLabel = new DarkLabel();
+        _headerPanel.SuspendLayout();
+        SuspendLayout();
 
-        Controls.Add(_tabs);
-        Controls.Add(_headerPanel);
-        Controls.Add(_menu);
-        Controls.Add(_statusStrip);
-
-        Shown += async (_, _) =>
-        {
-            if (_shown) return;
-            _shown = true;
-            await LoadPackageAsync();
-        };
-        FormClosing += OnFormClosing;
-        _tabs.SelectedIndexChanged += async (_, _) => await OnTabSelectedAsync();
-    }
-
-    // ------------------------------------------------------------------
-    // Chrome (menu, header, status)
-    // ------------------------------------------------------------------
-
-    private void BuildMenu()
-    {
-        _menu.Dock = DockStyle.Top;
-        _menu.Font = new Font("Segoe UI", 9F);
-
-        var fileMenu = new ToolStripMenuItem("File");
-        fileMenu.DropDownItems.Add(MenuItem("Open...", OpenAnotherPackage, Keys.Control | Keys.O));
-        fileMenu.DropDownItems.Add(MenuItem("Close", Close));
-        fileMenu.DropDownItems.Add(new DarkToolStripSeparator());
-        _extractAllMenuItem = MenuItem("Extract All...", () => _ = ExtractFullAsync(), Keys.Control | Keys.Shift | Keys.E);
-        fileMenu.DropDownItems.Add(_extractAllMenuItem);
-        fileMenu.DropDownItems.Add(MenuItem("Save Artwork...", SaveArtwork));
-        _exportMetadataMenuItem = MenuItem("Export Metadata...", ExportMetadata);
-        fileMenu.DropDownItems.Add(_exportMetadataMenuItem);
-        fileMenu.DropDownItems.Add(new DarkToolStripSeparator());
-        fileMenu.DropDownItems.Add(MenuItem("Open Source Folder", OpenSourceFolder));
-        fileMenu.DropDownItems.Add(MenuItem("Exit", Close));
-
-        var editMenu = new ToolStripMenuItem("Edit");
-        editMenu.DropDownItems.Add(MenuItem("Copy Title", () => CopyInfo("title")));
-        editMenu.DropDownItems.Add(MenuItem("Copy Title ID", () => CopyInfo("title_id")));
-        editMenu.DropDownItems.Add(MenuItem("Copy Content ID", () => CopyInfo("content_id")));
-        editMenu.DropDownItems.Add(MenuItem("Copy Source Path", CopySourcePath));
-        editMenu.DropDownItems.Add(new DarkToolStripSeparator());
-        editMenu.DropDownItems.Add(MenuItem("Find Files", FocusFileSearch, Keys.Control | Keys.F));
-
-        var viewMenu = new ToolStripMenuItem("View");
-        viewMenu.DropDownItems.Add(MenuItem("Overview", () => SelectTab(_overviewTab)));
-        viewMenu.DropDownItems.Add(MenuItem("Files", () => SelectTab(_filesTab)));
-        viewMenu.DropDownItems.Add(MenuItem("Artwork", () => SelectTab(_artworkTab)));
-        viewMenu.DropDownItems.Add(MenuItem("Trophies", () => SelectTab(_trophyTab)));
-        viewMenu.DropDownItems.Add(MenuItem("Internals", () => SelectTab(_packageTab)));
-        viewMenu.DropDownItems.Add(new DarkToolStripSeparator());
-        _previewPaneMenuItem = MenuItem("Preview Pane", TogglePreviewPane);
-        _previewPaneMenuItem.CheckOnClick = true;
-        _previewPaneMenuItem.Checked = true;
-        viewMenu.DropDownItems.Add(_previewPaneMenuItem);
-        viewMenu.DropDownItems.Add(MenuItem("Reset Layout", ResetLayout));
-
-        var toolsMenu = new ToolStripMenuItem("Tools");
-        _retryAccessMenuItem = MenuItem("Retry Content Access...", () => _ = RetryContentAccessAsync());
-        toolsMenu.DropDownItems.Add(_retryAccessMenuItem);
-        toolsMenu.DropDownItems.Add(new DarkToolStripSeparator());
-        toolsMenu.DropDownItems.Add(MenuItem("File Associations...", ShowAssociations));
-        var advancedMenu = new ToolStripMenuItem("Advanced");
-        advancedMenu.DropDownItems.Add(MenuItem("Remove legacy PS4/PS5 associations...", RemoveLegacyIntegration));
-        toolsMenu.DropDownItems.Add(advancedMenu);
-
-        var helpMenu = new ToolStripMenuItem("Help");
-        helpMenu.DropDownItems.Add(MenuItem("Open Log Folder", OpenLogFolder));
-        helpMenu.DropDownItems.Add(MenuItem("Copy Diagnostic Summary", CopyDiagnostics));
-        helpMenu.DropDownItems.Add(new DarkToolStripSeparator());
-        helpMenu.DropDownItems.Add(MenuItem("About", () => new AboutForm().ShowDialog(this)));
-        helpMenu.DropDownItems.Add(MenuItem("Support development", OpenCoffeeLink));
-
-        _menu.Items.Add(fileMenu);
-        _menu.Items.Add(editMenu);
-        _menu.Items.Add(viewMenu);
-        _menu.Items.Add(toolsMenu);
-        _menu.Items.Add(helpMenu);
-        MainMenuStrip = _menu;
-    }
-
-    private void EnableDragDrop()
-    {
-        AllowDrop = true;
-        _tabs.AllowDrop = true;
-        DragEnter += OnDragEnterPackage;
-        DragDrop += OnDragDropPackage;
-        _tabs.DragEnter += OnDragEnterPackage;
-        _tabs.DragDrop += OnDragDropPackage;
-    }
-
-    private void OnDragEnterPackage(object? sender, DragEventArgs e)
-    {
-        if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true)
-            e.Effect = DragDropEffects.Copy;
-    }
-
-    private void OnDragDropPackage(object? sender, DragEventArgs e)
-    {
-        if (e.Data?.GetData(DataFormats.FileDrop) is string[] { Length: > 0 } files)
-            OpenDroppedFile(files[0]);
-    }
-
-    private static ToolStripMenuItem MenuItem(string text, Action action, Keys shortcut = Keys.None)
-    {
-        var item = new ToolStripMenuItem(text) { ForeColor = Color.FromArgb(220, 220, 220) };
-        if (shortcut != Keys.None)
-        {
-            item.ShortcutKeys = shortcut;
-            item.ShowShortcutKeys = true;
-        }
-        item.Click += (_, _) => action();
-        return item;
-    }
-
-    private void BuildHeader()
-    {
+        _headerPanel.ShowThemeSelector = false;
         _headerPanel.Dock = DockStyle.Top;
         _headerPanel.Height = 104;
         _headerPanel.Padding = new Padding(16, 12, 16, 12);
@@ -265,7 +214,7 @@ partial class PackageViewerForm
         _titleLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _titleLabel.Location = new Point(118, 12);
         _titleLabel.Size = new Size(680, 27);
-        _titleLabel.DoubleClick += (_, _) => CopyToClipboard(_titleLabel.Text, "Title");
+        _titleLabel.DoubleClick += OnTitleDoubleClick;
 
         _subtitleLabel.Text = "Reading package metadata...";
         _subtitleLabel.AutoEllipsis = true;
@@ -282,42 +231,236 @@ partial class PackageViewerForm
         _headerPanel.Controls.Add(_subtitleLabel);
         _headerPanel.Controls.Add(_titleLabel);
         _headerPanel.Controls.Add(_iconBox);
-    }
 
-    private void BuildStatus()
-    {
+        // ---------------- Menu ----------------
+        _menu = new DarkMenuStrip();
+        _fileMenu = new ToolStripMenuItem();
+        _openMenuItem = new ToolStripMenuItem();
+        _closeMenuItem = new ToolStripMenuItem();
+        _fileSeparator1 = new DarkToolStripSeparator();
+        _extractAllMenuItem = new ToolStripMenuItem();
+        _saveArtworkMenuItem = new ToolStripMenuItem();
+        _exportMetadataMenuItem = new ToolStripMenuItem();
+        _fileSeparator2 = new DarkToolStripSeparator();
+        _openSourceFolderMenuItem = new ToolStripMenuItem();
+        _exitMenuItem = new ToolStripMenuItem();
+        _editMenu = new ToolStripMenuItem();
+        _copyTitleMenuItem = new ToolStripMenuItem();
+        _copyTitleIdMenuItem = new ToolStripMenuItem();
+        _copyContentIdMenuItem = new ToolStripMenuItem();
+        _copySourcePathMenuItem = new ToolStripMenuItem();
+        _editSeparator = new DarkToolStripSeparator();
+        _findFilesMenuItem = new ToolStripMenuItem();
+        _viewMenu = new ToolStripMenuItem();
+        _viewOverviewMenuItem = new ToolStripMenuItem();
+        _viewFilesMenuItem = new ToolStripMenuItem();
+        _viewArtworkMenuItem = new ToolStripMenuItem();
+        _viewTrophiesMenuItem = new ToolStripMenuItem();
+        _viewInternalsMenuItem = new ToolStripMenuItem();
+        _viewSeparator = new DarkToolStripSeparator();
+        _previewPaneMenuItem = new ToolStripMenuItem();
+        _resetLayoutMenuItem = new ToolStripMenuItem();
+        _toolsMenu = new ToolStripMenuItem();
+        _retryAccessMenuItem = new ToolStripMenuItem();
+        _toolsSeparator = new DarkToolStripSeparator();
+        _fileAssociationsMenuItem = new ToolStripMenuItem();
+        _advancedMenu = new ToolStripMenuItem();
+        _removeLegacyMenuItem = new ToolStripMenuItem();
+        _helpMenu = new ToolStripMenuItem();
+        _openLogFolderMenuItem = new ToolStripMenuItem();
+        _copyDiagnosticsMenuItem = new ToolStripMenuItem();
+        _helpSeparator = new DarkToolStripSeparator();
+        _aboutMenuItem = new ToolStripMenuItem();
+        _supportMenuItem = new ToolStripMenuItem();
+        _menu.SuspendLayout();
+
+        _menu.Dock = DockStyle.Top;
+        _menu.Font = new Font("Segoe UI", 9F);
+
+        _fileMenu.Text = "File";
+        ConfigureMenuItem(_openMenuItem, "Open...", Keys.Control | Keys.O, OnMenuOpen);
+        ConfigureMenuItem(_closeMenuItem, "Close", Keys.None, OnMenuClose);
+        ConfigureMenuItem(_extractAllMenuItem, "Extract All...", Keys.Control | Keys.Shift | Keys.E, OnMenuExtractAll);
+        ConfigureMenuItem(_saveArtworkMenuItem, "Save Artwork...", Keys.None, OnMenuSaveArtwork);
+        ConfigureMenuItem(_exportMetadataMenuItem, "Export Metadata...", Keys.None, OnMenuExportMetadata);
+        ConfigureMenuItem(_openSourceFolderMenuItem, "Open Source Folder", Keys.None, OnMenuOpenSourceFolder);
+        ConfigureMenuItem(_exitMenuItem, "Exit", Keys.None, OnMenuExit);
+        _fileMenu.DropDownItems.AddRange(new ToolStripItem[]
+        {
+            _openMenuItem, _closeMenuItem, _fileSeparator1, _extractAllMenuItem, _saveArtworkMenuItem,
+            _exportMetadataMenuItem, _fileSeparator2, _openSourceFolderMenuItem, _exitMenuItem
+        });
+
+        _editMenu.Text = "Edit";
+        ConfigureMenuItem(_copyTitleMenuItem, "Copy Title", Keys.None, OnMenuCopyTitle);
+        ConfigureMenuItem(_copyTitleIdMenuItem, "Copy Title ID", Keys.None, OnMenuCopyTitleId);
+        ConfigureMenuItem(_copyContentIdMenuItem, "Copy Content ID", Keys.None, OnMenuCopyContentId);
+        ConfigureMenuItem(_copySourcePathMenuItem, "Copy Source Path", Keys.None, OnMenuCopySourcePath);
+        ConfigureMenuItem(_findFilesMenuItem, "Find Files", Keys.Control | Keys.F, OnMenuFindFiles);
+        _editMenu.DropDownItems.AddRange(new ToolStripItem[]
+        {
+            _copyTitleMenuItem, _copyTitleIdMenuItem, _copyContentIdMenuItem, _copySourcePathMenuItem,
+            _editSeparator, _findFilesMenuItem
+        });
+
+        _viewMenu.Text = "View";
+        ConfigureMenuItem(_viewOverviewMenuItem, "Overview", Keys.None, OnMenuViewOverview);
+        ConfigureMenuItem(_viewFilesMenuItem, "Files", Keys.None, OnMenuViewFiles);
+        ConfigureMenuItem(_viewArtworkMenuItem, "Artwork", Keys.None, OnMenuViewArtwork);
+        ConfigureMenuItem(_viewTrophiesMenuItem, "Trophies", Keys.None, OnMenuViewTrophies);
+        ConfigureMenuItem(_viewInternalsMenuItem, "Internals", Keys.None, OnMenuViewInternals);
+        ConfigureMenuItem(_previewPaneMenuItem, "Preview Pane", Keys.None, OnMenuPreviewPane);
+        _previewPaneMenuItem.CheckOnClick = true;
+        _previewPaneMenuItem.Checked = true;
+        ConfigureMenuItem(_resetLayoutMenuItem, "Reset Layout", Keys.None, OnMenuResetLayout);
+        _viewMenu.DropDownItems.AddRange(new ToolStripItem[]
+        {
+            _viewOverviewMenuItem, _viewFilesMenuItem, _viewArtworkMenuItem, _viewTrophiesMenuItem,
+            _viewInternalsMenuItem, _viewSeparator, _previewPaneMenuItem, _resetLayoutMenuItem
+        });
+
+        _toolsMenu.Text = "Tools";
+        ConfigureMenuItem(_retryAccessMenuItem, "Retry Content Access...", Keys.None, OnMenuRetryAccess);
+        ConfigureMenuItem(_fileAssociationsMenuItem, "File Associations...", Keys.None, OnMenuFileAssociations);
+        _advancedMenu.Text = "Advanced";
+        ConfigureMenuItem(_removeLegacyMenuItem, "Remove legacy PS4/PS5 associations...", Keys.None, OnMenuRemoveLegacy);
+        _advancedMenu.DropDownItems.Add(_removeLegacyMenuItem);
+        _toolsMenu.DropDownItems.AddRange(new ToolStripItem[]
+        {
+            _retryAccessMenuItem, _toolsSeparator, _fileAssociationsMenuItem, _advancedMenu
+        });
+
+        _helpMenu.Text = "Help";
+        ConfigureMenuItem(_openLogFolderMenuItem, "Open Log Folder", Keys.None, OnMenuOpenLogFolder);
+        ConfigureMenuItem(_copyDiagnosticsMenuItem, "Copy Diagnostic Summary", Keys.None, OnMenuCopyDiagnostics);
+        ConfigureMenuItem(_aboutMenuItem, "About", Keys.None, OnMenuAbout);
+        ConfigureMenuItem(_supportMenuItem, "Support development", Keys.None, OnMenuSupport);
+        _helpMenu.DropDownItems.AddRange(new ToolStripItem[]
+        {
+            _openLogFolderMenuItem, _copyDiagnosticsMenuItem, _helpSeparator, _aboutMenuItem, _supportMenuItem
+        });
+
+        _menu.Items.AddRange(new ToolStripItem[] { _fileMenu, _editMenu, _viewMenu, _toolsMenu, _helpMenu });
+
+        // ---------------- Status ----------------
+        _statusStrip = new DarkStatusStrip();
+        _statusPath = new ToolStripStatusLabel();
+        _statusState = new ToolStripStatusLabel();
+        _statusWarnings = new ToolStripStatusLabel();
+        _statusSeparator1 = new DarkToolStripSeparator();
+        _statusSeparator2 = new DarkToolStripSeparator();
+        _progressBar = new DarkToolStripProgressBar();
+        _stopExtractButton = new DarkToolStripButton();
+        _statusStrip.SuspendLayout();
+
         _statusStrip.Font = new Font("Segoe UI", 8.25F);
-        _statusPath.Text = _currentPackagePath;
+        _statusPath.Spring = true;
+        _statusPath.TextAlign = ContentAlignment.MiddleLeft;
+        _statusPath.Text = string.Empty;
         _statusState.Text = "Starting...";
-        _stopExtractButton.Click += (_, _) => StopExtraction();
+        _statusWarnings.IsLink = true;
+        _statusWarnings.Visible = false;
+        _statusWarnings.Click += OnStatusWarningsClick;
+        _progressBar.Visible = false;
+        _progressBar.Style = ProgressBarStyle.Continuous;
+        _stopExtractButton.Text = "Stop Extract";
+        _stopExtractButton.Visible = false;
+        _stopExtractButton.Click += OnStopExtractClick;
+        _statusStrip.Items.AddRange(new ToolStripItem[]
+        {
+            _statusPath, _statusState, _statusWarnings, _statusSeparator1, _progressBar, _statusSeparator2, _stopExtractButton
+        });
 
-        _statusWarnings.Click += (_, _) => ShowWarnings();
-        _statusStrip.Items.Add(_statusPath);
-        _statusStrip.Items.Add(_statusState);
-        _statusStrip.Items.Add(_statusWarnings);
-        _statusStrip.Items.Add(new DarkToolStripSeparator());
-        _statusStrip.Items.Add(_progressBar);
-        _statusStrip.Items.Add(new DarkToolStripSeparator());
-        _statusStrip.Items.Add(_stopExtractButton);
-    }
+        // ---------------- Tabs ----------------
+        _tabs = new DarkTabControl();
+        _overviewTab = new DarkTabPage();
+        _packageTab = new DarkTabPage();
+        _trophyTab = new DarkTabPage();
+        _filesTab = new DarkTabPage();
+        _artworkTab = new DarkTabPage();
+        _tabs.SuspendLayout();
+        _overviewTab.SuspendLayout();
+        _packageTab.SuspendLayout();
+        _trophyTab.SuspendLayout();
+        _filesTab.SuspendLayout();
+        _artworkTab.SuspendLayout();
 
-    private void BuildTabs()
-    {
         _tabs.Dock = DockStyle.Fill;
         _tabs.ItemSize = new Size(108, 28);
         _tabs.Padding = new Point(0, 0);
 
+        _overviewTab.Text = "Overview";
+        _overviewTab.Padding = new Padding(12);
         BuildOverviewTab();
+        _packageTab.Text = "PKG Internals";
+        _packageTab.Padding = new Padding(12);
         BuildPackageTab();
+        _trophyTab.Text = "Trophies";
+        _trophyTab.Padding = new Padding(12);
         BuildTrophyTab();
+        _filesTab.Text = "File Browser";
+        _filesTab.Padding = new Padding(12);
         BuildFilesTab();
+        _artworkTab.Text = "Artwork";
+        _artworkTab.Padding = new Padding(12);
         BuildArtworkTab();
 
-        _tabs.TabPages.Add(_overviewTab);
-        _tabs.TabPages.Add(_packageTab);
-        _tabs.TabPages.Add(_trophyTab);
-        _tabs.TabPages.Add(_filesTab);
-        _tabs.TabPages.Add(_artworkTab);
+        _tabs.TabPages.AddRange(new TabPage[] { _overviewTab, _packageTab, _trophyTab, _filesTab, _artworkTab });
+        _tabs.SelectedIndexChanged += OnTabsSelectedIndexChanged;
+
+        // ---------------- Form ----------------
+        AutoScaleMode = AutoScaleMode.Font;
+        Text = "PkgViewer";
+        FormBorderStyle = FormBorderStyle.Sizable;
+        MaximizeBox = true;
+        MinimizeBox = true;
+        MinimumSize = new Size(860, 560);
+        ClientSize = new Size(1100, 680);
+        StartPosition = FormStartPosition.CenterScreen;
+        AllowDrop = true;
+        _tabs.AllowDrop = true;
+        DragEnter += OnDragEnterPackage;
+        DragDrop += OnDragDropPackage;
+        _tabs.DragEnter += OnDragEnterPackage;
+        _tabs.DragDrop += OnDragDropPackage;
+        Shown += OnFormShown;
+        FormClosing += OnFormClosing;
+        MainMenuStrip = _menu;
+
+        Controls.Add(_tabs);
+        Controls.Add(_headerPanel);
+        Controls.Add(_menu);
+        Controls.Add(_statusStrip);
+
+        _overviewTab.ResumeLayout(false);
+        _overviewTab.PerformLayout();
+        _packageTab.ResumeLayout(false);
+        _packageTab.PerformLayout();
+        _trophyTab.ResumeLayout(false);
+        _trophyTab.PerformLayout();
+        _filesTab.ResumeLayout(false);
+        _filesTab.PerformLayout();
+        _artworkTab.ResumeLayout(false);
+        _artworkTab.PerformLayout();
+        _tabs.ResumeLayout(false);
+        _headerPanel.ResumeLayout(false);
+        _statusStrip.ResumeLayout(false);
+        _menu.ResumeLayout(false);
+        _menu.PerformLayout();
+        ResumeLayout(false);
+        PerformLayout();
+    }
+
+    private static void ConfigureMenuItem(ToolStripMenuItem item, string text, Keys shortcut, EventHandler handler)
+    {
+        item.Text = text;
+        item.ForeColor = Color.FromArgb(220, 220, 220);
+        if (shortcut != Keys.None)
+        {
+            item.ShortcutKeys = shortcut;
+            item.ShowShortcutKeys = true;
+        }
+        item.Click += handler;
     }
 
     // ------------------------------------------------------------------
@@ -326,46 +469,60 @@ partial class PackageViewerForm
 
     private void BuildOverviewTab()
     {
-        string[] captions =
-        [
-            "Title", "Title ID", "Content ID", "Category", "Region", "Package state",
-            "Application version", "Package version", "Required firmware", "Package size"
-        ];
+        _overviewLayout = new TableLayoutPanel();
+        _overviewPanel = new DarkSectionPanel();
+        _overviewSummaryHost = new Panel();
+        _overviewSummaryTable = new TableLayoutPanel();
+        _sfoPanel = new DarkSectionPanel();
+        _sfoGrid = new DarkDataGridView();
+        _sfoKeyColumn = new DataGridViewTextBoxColumn();
+        _sfoValueColumn = new DataGridViewTextBoxColumn();
+        _paramJsonPanel = new DarkSectionPanel();
+        _paramJsonTree = new DarkTreeView();
+        _overviewSummaryHost.SuspendLayout();
+        _overviewPanel.SuspendLayout();
+        _sfoPanel.SuspendLayout();
+        _paramJsonPanel.SuspendLayout();
+        ((System.ComponentModel.ISupportInitialize)_sfoGrid).BeginInit();
+        _overviewLayout.SuspendLayout();
 
-        // Auto-sized rows in a scroll host so the summary renders identically for every format and
-        // can grow with the backend's extra rows without leaving large empty gaps.
-        var table = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            ColumnCount = 2,
-            RowCount = 0,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Margin = new Padding(0),
-            Padding = new Padding(0)
-        };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140F));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _overviewSummaryTable = table;
+        _overviewSummaryTable.Dock = DockStyle.Top;
+        _overviewSummaryTable.ColumnCount = 2;
+        _overviewSummaryTable.RowCount = 0;
+        _overviewSummaryTable.AutoSize = true;
+        _overviewSummaryTable.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _overviewSummaryTable.Margin = new Padding(0);
+        _overviewSummaryTable.Padding = new Padding(0);
+        _overviewSummaryTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140F));
+        _overviewSummaryTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _overviewSummaryHost.Dock = DockStyle.Fill;
+        _overviewSummaryHost.AutoScroll = true;
+        _overviewSummaryHost.Padding = new Padding(0);
+        _overviewSummaryHost.Controls.Add(_overviewSummaryTable);
 
-        foreach (string caption in captions)
-            AddOverviewRow(table, caption, bold: caption == "Title");
-
-        var host = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(0) };
-        host.Controls.Add(table);
-
+        _overviewPanel.SectionHeader = "Package Summary";
         _overviewPanel.Dock = DockStyle.Fill;
         _overviewPanel.Margin = new Padding(0, 0, 6, 0);
         _overviewPanel.Padding = new Padding(16, 12, 16, 16);
-        _overviewPanel.Controls.Add(host);
+        _overviewPanel.Controls.Add(_overviewSummaryHost);
 
         SetupGrid(_sfoGrid);
-        _sfoGrid.Columns.Add(TextColumn("Key", 35F));
-        _sfoGrid.Columns.Add(TextColumn("Value", 65F));
+        _sfoKeyColumn.Name = "Key";
+        _sfoKeyColumn.HeaderText = "Key";
+        _sfoKeyColumn.FillWeight = 35F;
+        _sfoKeyColumn.ReadOnly = true;
+        _sfoValueColumn.Name = "Value";
+        _sfoValueColumn.HeaderText = "Value";
+        _sfoValueColumn.FillWeight = 65F;
+        _sfoValueColumn.ReadOnly = true;
+        _sfoGrid.Columns.Add(_sfoKeyColumn);
+        _sfoGrid.Columns.Add(_sfoValueColumn);
+        _sfoPanel.SectionHeader = "PARAM.SFO";
         _sfoPanel.Dock = DockStyle.Fill;
         _sfoPanel.Margin = new Padding(6, 0, 0, 0);
         _sfoPanel.Controls.Add(_sfoGrid);
 
+        _paramJsonPanel.SectionHeader = "param.json";
         _paramJsonPanel.Dock = DockStyle.Fill;
         _paramJsonPanel.Margin = new Padding(6, 0, 0, 0);
         _paramJsonTree.Dock = DockStyle.Fill;
@@ -374,13 +531,23 @@ partial class PackageViewerForm
         _paramJsonTree.ShowRootLines = true;
         _paramJsonPanel.Controls.Add(_paramJsonTree);
 
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-        layout.Controls.Add(_overviewPanel, 0, 0);
-        layout.Controls.Add(_sfoPanel, 1, 0);
-        _overviewLayout = layout;
-        _overviewTab.Controls.Add(layout);
+        _overviewLayout.Dock = DockStyle.Fill;
+        _overviewLayout.ColumnCount = 2;
+        _overviewLayout.RowCount = 1;
+        _overviewLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        _overviewLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        _overviewLayout.Controls.Add(_overviewPanel, 0, 0);
+        _overviewLayout.Controls.Add(_sfoPanel, 1, 0);
+
+        _overviewValues = new Dictionary<string, DarkLabel>(StringComparer.Ordinal);
+        _overviewTab.Controls.Add(_overviewLayout);
+
+        _overviewLayout.ResumeLayout(false);
+        ((System.ComponentModel.ISupportInitialize)_sfoGrid).EndInit();
+        _paramJsonPanel.ResumeLayout(false);
+        _sfoPanel.ResumeLayout(false);
+        _overviewPanel.ResumeLayout(false);
+        _overviewSummaryHost.ResumeLayout(false);
     }
 
     /// <summary>Adds one auto-sized caption/value row to the summary table and returns the value label.</summary>
@@ -411,7 +578,7 @@ partial class PackageViewerForm
             Cursor = Cursors.Hand,
             Font = bold ? new Font("Segoe UI", 9F, FontStyle.Bold) : new Font("Segoe UI", 9F)
         };
-        value.DoubleClick += (_, _) => CopyToClipboard(value.Text, caption);
+        value.DoubleClick += OnOverviewValueDoubleClick;
         if (track) _overviewValues[caption] = value;
 
         table.Controls.Add(captionLabel, 0, index);
@@ -425,41 +592,117 @@ partial class PackageViewerForm
 
     private void BuildPackageTab()
     {
+        _packageTabs = new DarkTabControl();
+        _headerTab = new DarkTabPage();
+        _buildTab = new DarkTabPage();
+        _entriesTab = new DarkTabPage();
+        _headerGrid = new DarkDataGridView();
+        _headerFieldColumn = new DataGridViewTextBoxColumn();
+        _headerValueColumn = new DataGridViewTextBoxColumn();
+        _buildGrid = new DarkDataGridView();
+        _buildFieldColumn = new DataGridViewTextBoxColumn();
+        _buildValueColumn = new DataGridViewTextBoxColumn();
+        _entriesGrid = new DarkDataGridView();
+        _entriesNameColumn = new DataGridViewTextBoxColumn();
+        _entriesOffsetColumn = new DataGridViewTextBoxColumn();
+        _entriesSizeColumn = new DataGridViewTextBoxColumn();
+        _entriesFlags1Column = new DataGridViewTextBoxColumn();
+        _entriesFlags2Column = new DataGridViewTextBoxColumn();
+        _entriesEncryptedColumn = new DataGridViewTextBoxColumn();
+        _packageTabs.SuspendLayout();
+        _headerTab.SuspendLayout();
+        _buildTab.SuspendLayout();
+        _entriesTab.SuspendLayout();
+        ((System.ComponentModel.ISupportInitialize)_headerGrid).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)_buildGrid).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)_entriesGrid).BeginInit();
+
         _packageTabs.Dock = DockStyle.Fill;
         _packageTabs.ItemSize = new Size(88, 28);
         _packageTabs.Padding = new Point(0, 0);
 
+        _headerTab.Text = "Header";
         SetupGrid(_headerGrid);
-        _headerGrid.Columns.Add(TextColumn("Field", 38F));
-        _headerGrid.Columns.Add(TextColumn("Value", 62F));
+        _headerFieldColumn.Name = "Field";
+        _headerFieldColumn.HeaderText = "Field";
+        _headerFieldColumn.FillWeight = 38F;
+        _headerFieldColumn.ReadOnly = true;
+        _headerValueColumn.Name = "Value";
+        _headerValueColumn.HeaderText = "Value";
+        _headerValueColumn.FillWeight = 62F;
+        _headerValueColumn.ReadOnly = true;
+        _headerGrid.Columns.Add(_headerFieldColumn);
+        _headerGrid.Columns.Add(_headerValueColumn);
+        AttachGridCopyMenu(_headerGrid);
         _headerTab.Controls.Add(_headerGrid);
 
+        _buildTab.Text = "Build Info";
         SetupGrid(_buildGrid);
-        _buildGrid.Columns.Add(TextColumn("Field", 38F));
-        _buildGrid.Columns.Add(TextColumn("Value", 62F));
+        _buildFieldColumn.Name = "Field";
+        _buildFieldColumn.HeaderText = "Field";
+        _buildFieldColumn.FillWeight = 38F;
+        _buildFieldColumn.ReadOnly = true;
+        _buildValueColumn.Name = "Value";
+        _buildValueColumn.HeaderText = "Value";
+        _buildValueColumn.FillWeight = 62F;
+        _buildValueColumn.ReadOnly = true;
+        _buildGrid.Columns.Add(_buildFieldColumn);
+        _buildGrid.Columns.Add(_buildValueColumn);
+        AttachGridCopyMenu(_buildGrid);
         _buildTab.Controls.Add(_buildGrid);
 
+        _entriesTab.Text = "Entries";
         SetupGrid(_entriesGrid);
-        _entriesGrid.Columns.Add(TextColumn("Name", 24F));
-        _entriesGrid.Columns.Add(TextColumn("Offset", 17F));
-        _entriesGrid.Columns.Add(TextColumn("Size", 17F));
-        _entriesGrid.Columns.Add(TextColumn("Flags 1", 14F));
-        _entriesGrid.Columns.Add(TextColumn("Flags 2", 14F));
-        _entriesGrid.Columns.Add(TextColumn("Encrypted?", 14F));
-        _entriesGrid.Columns["Offset"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
-        _entriesGrid.Columns["Size"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        _entriesNameColumn.Name = "Name";
+        _entriesNameColumn.HeaderText = "Name";
+        _entriesNameColumn.FillWeight = 24F;
+        _entriesNameColumn.ReadOnly = true;
+        _entriesOffsetColumn.Name = "Offset";
+        _entriesOffsetColumn.HeaderText = "Offset";
+        _entriesOffsetColumn.FillWeight = 17F;
+        _entriesOffsetColumn.ReadOnly = true;
+        _entriesOffsetColumn.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        _entriesSizeColumn.Name = "Size";
+        _entriesSizeColumn.HeaderText = "Size";
+        _entriesSizeColumn.FillWeight = 17F;
+        _entriesSizeColumn.ReadOnly = true;
+        _entriesSizeColumn.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        _entriesFlags1Column.Name = "Flags 1";
+        _entriesFlags1Column.HeaderText = "Flags 1";
+        _entriesFlags1Column.FillWeight = 14F;
+        _entriesFlags1Column.ReadOnly = true;
+        _entriesFlags2Column.Name = "Flags 2";
+        _entriesFlags2Column.HeaderText = "Flags 2";
+        _entriesFlags2Column.FillWeight = 14F;
+        _entriesFlags2Column.ReadOnly = true;
+        _entriesEncryptedColumn.Name = "Encrypted?";
+        _entriesEncryptedColumn.HeaderText = "Encrypted?";
+        _entriesEncryptedColumn.FillWeight = 14F;
+        _entriesEncryptedColumn.ReadOnly = true;
+        _entriesGrid.Columns.Add(_entriesNameColumn);
+        _entriesGrid.Columns.Add(_entriesOffsetColumn);
+        _entriesGrid.Columns.Add(_entriesSizeColumn);
+        _entriesGrid.Columns.Add(_entriesFlags1Column);
+        _entriesGrid.Columns.Add(_entriesFlags2Column);
+        _entriesGrid.Columns.Add(_entriesEncryptedColumn);
         _entriesGrid.ColumnHeaderMouseClick += OnEntriesColumnHeaderClick;
         AttachGridCopyMenu(_entriesGrid);
-        AttachGridCopyMenu(_headerGrid);
-        AttachGridCopyMenu(_buildGrid);
-        AttachGridCopyMenu(_sfoGrid);
-        AttachGridCopyMenu(_trophyGrid);
         _entriesTab.Controls.Add(_entriesGrid);
+
+        AttachGridCopyMenu(_sfoGrid);
 
         _packageTabs.TabPages.Add(_headerTab);
         _packageTabs.TabPages.Add(_buildTab);
         _packageTabs.TabPages.Add(_entriesTab);
         _packageTab.Controls.Add(_packageTabs);
+
+        ((System.ComponentModel.ISupportInitialize)_entriesGrid).EndInit();
+        ((System.ComponentModel.ISupportInitialize)_buildGrid).EndInit();
+        ((System.ComponentModel.ISupportInitialize)_headerGrid).EndInit();
+        _entriesTab.ResumeLayout(false);
+        _buildTab.ResumeLayout(false);
+        _headerTab.ResumeLayout(false);
+        _packageTabs.ResumeLayout(false);
     }
 
     // ------------------------------------------------------------------
@@ -468,38 +711,71 @@ partial class PackageViewerForm
 
     private void BuildTrophyTab()
     {
+        _trophyGrid = new DarkDataGridView();
+        _trophyIconColumn = new DataGridViewImageColumn();
+        _trophyIdColumn = new DataGridViewTextBoxColumn();
+        _trophyNameColumn = new DataGridViewTextBoxColumn();
+        _trophyDescriptionColumn = new DataGridViewTextBoxColumn();
+        _trophyTypeColumn = new DataGridViewTextBoxColumn();
+        _trophyHiddenColumn = new DataGridViewTextBoxColumn();
+        _trophyState = new DarkLabel();
+        _trophyFilter = new DarkSearchBox();
+        ((System.ComponentModel.ISupportInitialize)_trophyGrid).BeginInit();
+
         SetupGrid(_trophyGrid);
         _trophyGrid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
         _trophyGrid.RowTemplate.Height = 52;
-        _trophyGrid.Columns.Add(new DataGridViewImageColumn
-        {
-            HeaderText = "Icon",
-            FillWeight = 10F,
-            ImageLayout = DataGridViewImageCellLayout.Zoom,
-            ReadOnly = true,
-            Resizable = DataGridViewTriState.True
-        });
-        _trophyGrid.Columns.Add(TextColumn("ID", 8F));
-        _trophyGrid.Columns.Add(TextColumn("Name", 23F));
-        _trophyGrid.Columns.Add(TextColumn("Description", 39F));
-        _trophyGrid.Columns.Add(TextColumn("Type", 12F));
-        _trophyGrid.Columns.Add(TextColumn("Hidden", 8F));
+        _trophyIconColumn.HeaderText = "Icon";
+        _trophyIconColumn.FillWeight = 10F;
+        _trophyIconColumn.ImageLayout = DataGridViewImageCellLayout.Zoom;
+        _trophyIconColumn.ReadOnly = true;
+        _trophyIconColumn.Resizable = DataGridViewTriState.True;
+        _trophyIdColumn.Name = "ID";
+        _trophyIdColumn.HeaderText = "ID";
+        _trophyIdColumn.FillWeight = 8F;
+        _trophyIdColumn.ReadOnly = true;
+        _trophyNameColumn.Name = "Name";
+        _trophyNameColumn.HeaderText = "Name";
+        _trophyNameColumn.FillWeight = 23F;
+        _trophyNameColumn.ReadOnly = true;
+        _trophyDescriptionColumn.Name = "Description";
+        _trophyDescriptionColumn.HeaderText = "Description";
+        _trophyDescriptionColumn.FillWeight = 39F;
+        _trophyDescriptionColumn.ReadOnly = true;
+        _trophyTypeColumn.Name = "Type";
+        _trophyTypeColumn.HeaderText = "Type";
+        _trophyTypeColumn.FillWeight = 12F;
+        _trophyTypeColumn.ReadOnly = true;
+        _trophyHiddenColumn.Name = "Hidden";
+        _trophyHiddenColumn.HeaderText = "Hidden";
+        _trophyHiddenColumn.FillWeight = 8F;
+        _trophyHiddenColumn.ReadOnly = true;
+        _trophyGrid.Columns.Add(_trophyIconColumn);
+        _trophyGrid.Columns.Add(_trophyIdColumn);
+        _trophyGrid.Columns.Add(_trophyNameColumn);
+        _trophyGrid.Columns.Add(_trophyDescriptionColumn);
+        _trophyGrid.Columns.Add(_trophyTypeColumn);
+        _trophyGrid.Columns.Add(_trophyHiddenColumn);
+        AttachGridCopyMenu(_trophyGrid);
 
+        _trophyState.Text = "Trophy information loads when this page is selected.";
         _trophyState.Dock = DockStyle.Top;
         _trophyState.Height = 30;
         _trophyState.Font = new Font("Segoe UI", 8.5F, FontStyle.Italic);
         _trophyState.Padding = new Padding(10, 7, 10, 7);
         _trophyState.TextAlign = ContentAlignment.MiddleLeft;
-
+        _trophyFilter.Placeholder = "Filter trophies by name, description or type";
         _trophyFilter.Dock = DockStyle.Top;
         _trophyFilter.Height = 30;
-        _trophyFilter.SearchTextChanged += (_, _) => ApplyTrophyFilter();
+        _trophyFilter.SearchTextChanged += OnTrophyFilterChanged;
 
         _trophyTab.Controls.Add(_trophyGrid);
         _trophyTab.Controls.Add(_trophyState);
         _trophyTab.Controls.Add(_trophyFilter);
         _trophyState.BringToFront();
         _trophyFilter.BringToFront();
+
+        ((System.ComponentModel.ISupportInitialize)_trophyGrid).EndInit();
     }
 
     // ------------------------------------------------------------------
@@ -508,6 +784,53 @@ partial class PackageViewerForm
 
     private void BuildFilesTab()
     {
+        _fileIcons = new ImageList();
+        _fileTree = new DarkTreeView();
+        _fileList = new DarkListView();
+        _fileContextMenu = new DarkContextMenu();
+        _filePreviewMenuItem = new ToolStripMenuItem();
+        _fileExtractMenuItem = new ToolStripMenuItem();
+        _fileOpenContainingMenuItem = new ToolStripMenuItem();
+        _fileCopyPathMenuItem = new ToolStripMenuItem();
+        _fileCopyNameMenuItem = new ToolStripMenuItem();
+        _fileTreeContextMenu = new DarkContextMenu();
+        _treePreviewMenuItem = new ToolStripMenuItem();
+        _treeExtractMenuItem = new ToolStripMenuItem();
+        _treeExpandMenuItem = new ToolStripMenuItem();
+        _treeCollapseMenuItem = new ToolStripMenuItem();
+        _treeExpandAllMenuItem = new ToolStripMenuItem();
+        _treeCollapseAllMenuItem = new ToolStripMenuItem();
+        _treeCopyPathMenuItem = new ToolStripMenuItem();
+        _treeCopyNameMenuItem = new ToolStripMenuItem();
+        _previewImage = new PictureBox();
+        _previewText = new DarkTextBox();
+        _previewBody = new Panel();
+        _previewInfo = new DarkLabel();
+        _previewPanel = new DarkSectionPanel();
+        _filesSplitPane1 = new DarkSplitPane();
+        _filesSplitPane2 = new DarkSplitPane();
+        _filesSplitPane3 = new DarkSplitPane();
+        _filesSplit = new DarkSplitContainer();
+        _fileBreadcrumb = new DarkLabel();
+        _upButton = new DarkButton();
+        _extractSelectedButton = new DarkButton();
+        _extractAllButton = new DarkButton();
+        _filesToolbar = new TableLayoutPanel();
+        _fileFilter = new DarkSearchBox();
+        _filesLayout = new TableLayoutPanel();
+        _filesSplit.SuspendLayout();
+        _filesSplitPane1.SuspendLayout();
+        _filesSplitPane2.SuspendLayout();
+        _filesSplitPane3.SuspendLayout();
+        _previewPanel.SuspendLayout();
+        _previewBody.SuspendLayout();
+        _filesToolbar.SuspendLayout();
+        _filesLayout.SuspendLayout();
+
+        _fileIcons.ColorDepth = ColorDepth.Depth32Bit;
+        _fileIcons.ImageSize = new Size(16, 16);
+        _fileIcons.TransparentColor = Color.Transparent;
+
         _fileTree.CheckBoxes = false;
         _fileTree.FullRowSelect = false;
         _fileTree.HotTracking = false;
@@ -517,90 +840,164 @@ partial class PackageViewerForm
         _fileTree.ShowLines = true;
         _fileTree.ShowPlusMinus = true;
         _fileTree.ShowRootLines = true;
-        _fileTree.AfterSelect += (_, _) => OnFileTreeNodeSelected();
+        _fileTree.ImageList = _fileIcons;
+        _fileTree.AfterSelect += OnFileTreeAfterSelect;
         _fileTree.NodeMouseClick += OnFileTreeNodeMouseClick;
         _fileTree.ItemDrag += OnFilesItemDrag;
-        _fileTree.ContextMenuStrip = _fileTreeContextMenu;
 
         _fileList.View = View.Details;
         _fileList.FullRowSelect = true;
         _fileList.MultiSelect = true;
+        _fileList.SmallImageList = _fileIcons;
         _fileList.Columns.Add("Name", 220);
         _fileList.Columns.Add("Type", 100);
         _fileList.Columns.Add("Path", 260);
         _fileList.Columns.Add("Size", 90);
-        _fileList.ItemActivate += (_, _) => ActivateFileListItem();
+        _fileList.ItemActivate += OnFileListItemActivate;
         _fileList.MouseClick += OnFileListMouseClick;
-        _fileList.SelectedIndexChanged += (_, _) => UpdateFileActionState();
+        _fileList.SelectedIndexChanged += OnFileListSelectedIndexChanged;
         _fileList.KeyDown += OnFileListKeyDown;
         _fileList.ItemDrag += OnFilesItemDrag;
 
-        _fileTree.ImageList = _fileIcons;
-        _fileList.SmallImageList = _fileIcons;
-        BuildFileContextMenu();
-        BuildFileTreeContextMenu();
+        // File context menu
+        ConfigureMenuItem(_filePreviewMenuItem, "Preview", Keys.None, OnFileContextPreview);
+        ConfigureMenuItem(_fileExtractMenuItem, "Extract...", Keys.None, OnFileContextExtract);
+        ConfigureMenuItem(_fileOpenContainingMenuItem, "Open containing folder", Keys.None, OnFileContextOpenContaining);
+        ConfigureMenuItem(_fileCopyPathMenuItem, "Copy path", Keys.None, OnFileContextCopyPath);
+        ConfigureMenuItem(_fileCopyNameMenuItem, "Copy filename", Keys.None, OnFileContextCopyName);
+        _fileContextMenu.Items.AddRange(new ToolStripItem[]
+        {
+            _filePreviewMenuItem, new DarkToolStripSeparator(), _fileExtractMenuItem,
+            new DarkToolStripSeparator(), _fileOpenContainingMenuItem, _fileCopyPathMenuItem, _fileCopyNameMenuItem
+        });
+        _fileList.ContextMenuStrip = _fileContextMenu;
 
+        // Folder-tree context menu
+        ConfigureMenuItem(_treePreviewMenuItem, "Preview", Keys.None, OnTreeContextPreview);
+        ConfigureMenuItem(_treeExtractMenuItem, "Extract...", Keys.None, OnTreeContextExtract);
+        ConfigureMenuItem(_treeExpandMenuItem, "Expand", Keys.None, OnTreeContextExpand);
+        ConfigureMenuItem(_treeCollapseMenuItem, "Collapse", Keys.None, OnTreeContextCollapse);
+        ConfigureMenuItem(_treeExpandAllMenuItem, "Expand all", Keys.None, OnTreeContextExpandAll);
+        ConfigureMenuItem(_treeCollapseAllMenuItem, "Collapse all", Keys.None, OnTreeContextCollapseAll);
+        ConfigureMenuItem(_treeCopyPathMenuItem, "Copy path", Keys.None, OnTreeContextCopyPath);
+        ConfigureMenuItem(_treeCopyNameMenuItem, "Copy name", Keys.None, OnTreeContextCopyName);
+        _fileTreeContextMenu.Items.AddRange(new ToolStripItem[]
+        {
+            _treePreviewMenuItem, _treeExtractMenuItem, new DarkToolStripSeparator(),
+            _treeExpandMenuItem, _treeCollapseMenuItem, _treeExpandAllMenuItem, _treeCollapseAllMenuItem,
+            new DarkToolStripSeparator(), _treeCopyPathMenuItem, _treeCopyNameMenuItem
+        });
+        _fileTreeContextMenu.Opening += OnFileTreeContextOpening;
+        _fileTree.ContextMenuStrip = _fileTreeContextMenu;
+
+        _previewImage.SizeMode = PictureBoxSizeMode.Zoom;
+        _previewImage.Visible = false;
+        _previewImage.BackColor = Color.FromArgb(20, 20, 20);
+        _previewImage.Dock = DockStyle.Fill;
+        _previewText.Multiline = true;
+        _previewText.ReadOnly = true;
+        _previewText.ScrollBars = ScrollBars.Both;
+        _previewText.WordWrap = false;
+        _previewText.BorderStyle = BorderStyle.None;
+        _previewText.Font = new Font("Consolas", 9F);
+        _previewText.Visible = false;
+        _previewText.Dock = DockStyle.Fill;
+        _previewBody.BackColor = Color.FromArgb(20, 20, 20);
+        _previewBody.Padding = new Padding(1);
+        _previewBody.Dock = DockStyle.Fill;
+        _previewBody.Controls.Add(_previewImage);
+        _previewBody.Controls.Add(_previewText);
+        _previewInfo.Text = "Double-click a file to preview it.";
         _previewInfo.Dock = DockStyle.Top;
         _previewInfo.AutoEllipsis = true;
         _previewInfo.Height = 34;
         _previewInfo.Padding = new Padding(8, 0, 8, 0);
         _previewInfo.TextAlign = ContentAlignment.MiddleLeft;
-        _previewImage.Dock = DockStyle.Fill;
-        _previewText.Dock = DockStyle.Fill;
-        _previewBody.Dock = DockStyle.Fill;
-        _previewBody.Controls.Add(_previewImage);
-        _previewBody.Controls.Add(_previewText);
+        _previewPanel.SectionHeader = "File Preview";
+        _previewPanel.Dock = DockStyle.Fill;
         _previewPanel.Controls.Add(_previewBody);
         _previewPanel.Controls.Add(_previewInfo);
         _previewInfo.BringToFront();
 
-        // Draggable three-pane split: folder tree | content list | file preview.
-        _filesSplit = new DarkSplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = DarkSplitContainer.DarkSplitOrientation.Vertical,
-            SplitterWidth = 6
-        };
-        _filesSplit.AddPanel(_fileTree);
-        _filesSplit.AddPanel(_fileList);
-        _filesSplit.AddPanel(_previewPanel);
-        _filesSplit.PanelSizes = [280, 420, 380];
+        _filesSplitPane1.Controls.Add(_fileTree);
+        _filesSplitPane2.Controls.Add(_fileList);
+        _filesSplitPane3.Controls.Add(_previewPanel);
+        _filesSplit.Dock = DockStyle.Fill;
+        _filesSplit.Orientation = DarkSplitContainer.DarkSplitOrientation.Vertical;
+        _filesSplit.SplitterWidth = 6;
+        _filesSplit.Controls.Add(_filesSplitPane1);
+        _filesSplit.Controls.Add(_filesSplitPane2);
+        _filesSplit.Controls.Add(_filesSplitPane3);
 
+        _fileBreadcrumb.Text = "Package root";
         _fileBreadcrumb.Dock = DockStyle.Fill;
         _fileBreadcrumb.AutoEllipsis = true;
         _fileBreadcrumb.TextAlign = ContentAlignment.MiddleLeft;
         _fileBreadcrumb.Padding = new Padding(6, 0, 6, 0);
+        _upButton.Text = "Up";
         _upButton.Dock = DockStyle.Fill;
-        _extractSelectedButton.Dock = DockStyle.Fill;
-        _extractAllButton.Dock = DockStyle.Fill;
         _upButton.Margin = new Padding(2);
+        _upButton.Click += OnUpClick;
+        _extractSelectedButton.Text = "Extract Selected...";
+        _extractSelectedButton.Dock = DockStyle.Fill;
         _extractSelectedButton.Margin = new Padding(2);
+        _extractSelectedButton.Click += OnExtractSelectedClick;
+        _extractAllButton.Text = "Extract All...";
+        _extractAllButton.Dock = DockStyle.Fill;
         _extractAllButton.Margin = new Padding(2);
-        _upButton.Click += (_, _) => NavigateUp();
-        _extractSelectedButton.Click += (_, _) => _ = ExtractSelectedAsync();
-        _extractAllButton.Click += (_, _) => _ = ExtractFullAsync();
+        _extractAllButton.Click += OnExtractAllClick;
 
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = new Padding(0) };
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 56F));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 156F));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130F));
-        toolbar.Controls.Add(_fileBreadcrumb, 0, 0);
-        toolbar.Controls.Add(_upButton, 1, 0);
-        toolbar.Controls.Add(_extractSelectedButton, 2, 0);
-        toolbar.Controls.Add(_extractAllButton, 3, 0);
+        _filesToolbar.Dock = DockStyle.Fill;
+        _filesToolbar.ColumnCount = 4;
+        _filesToolbar.RowCount = 1;
+        _filesToolbar.Margin = new Padding(0);
+        _filesToolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _filesToolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 56F));
+        _filesToolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 156F));
+        _filesToolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130F));
+        _filesToolbar.Controls.Add(_fileBreadcrumb, 0, 0);
+        _filesToolbar.Controls.Add(_upButton, 1, 0);
+        _filesToolbar.Controls.Add(_extractSelectedButton, 2, 0);
+        _filesToolbar.Controls.Add(_extractAllButton, 3, 0);
 
+        _fileFilter.Placeholder = "Filter filename here";
         _fileFilter.Dock = DockStyle.Fill;
-        _fileFilter.SearchTextChanged += (_, _) => RefreshFileList();
+        _fileFilter.SearchTextChanged += OnFileFilterChanged;
 
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        layout.Controls.Add(toolbar, 0, 0);
-        layout.Controls.Add(_fileFilter, 0, 1);
-        layout.Controls.Add(_filesSplit, 0, 2);
-        _filesTab.Controls.Add(layout);
+        _filesLayout.Dock = DockStyle.Fill;
+        _filesLayout.ColumnCount = 1;
+        _filesLayout.RowCount = 3;
+        _filesLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
+        _filesLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
+        _filesLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        _filesLayout.Controls.Add(_filesToolbar, 0, 0);
+        _filesLayout.Controls.Add(_fileFilter, 0, 1);
+        _filesLayout.Controls.Add(_filesSplit, 0, 2);
+        _filesTab.Controls.Add(_filesLayout);
+
+        _filesLayout.ResumeLayout(false);
+        _filesToolbar.ResumeLayout(false);
+        _previewBody.ResumeLayout(false);
+        _previewPanel.ResumeLayout(false);
+        _filesSplitPane3.ResumeLayout(false);
+        _filesSplitPane2.ResumeLayout(false);
+        _filesSplitPane1.ResumeLayout(false);
+        _filesSplit.ResumeLayout(false);
+    }
+
+    private void AttachGridCopyMenu(DarkDataGridView grid)
+    {
+        if (_gridContextMenu is null)
+        {
+            _gridContextMenu = new DarkContextMenu();
+            _gridCopyValueMenuItem = new ToolStripMenuItem();
+            _gridCopyRowMenuItem = new ToolStripMenuItem();
+            ConfigureMenuItem(_gridCopyValueMenuItem, "Copy value", Keys.None, OnGridCopyValue);
+            ConfigureMenuItem(_gridCopyRowMenuItem, "Copy row", Keys.None, OnGridCopyRow);
+            _gridContextMenu.Items.Add(_gridCopyValueMenuItem);
+            _gridContextMenu.Items.Add(_gridCopyRowMenuItem);
+        }
+        grid.CellContextMenuStripNeeded += OnGridContextMenuNeeded;
     }
 
     // ------------------------------------------------------------------
@@ -609,37 +1006,89 @@ partial class PackageViewerForm
 
     private void BuildArtworkTab()
     {
-        BuildArtworkPanel(_iconPanel, _iconEmpty, _iconArtBox);
-        BuildArtworkPanel(_pic0Panel, _pic0Empty, _pic0Box);
-        BuildArtworkPanel(_pic1Panel, _pic1Empty, _pic1Box);
-        BuildArtworkPanel(_pic2Panel, _pic2Empty, _pic2Box);
-        AttachArtworkMenu(_iconArtBox, "ICON");
-        AttachArtworkMenu(_pic0Box, "PIC0");
-        AttachArtworkMenu(_pic1Box, "PIC1");
-        AttachArtworkMenu(_pic2Box, "PIC2");
-        _artworkTab.Controls.Add(BuildArtworkLayout(isPs4: true));
+        _artworkLayout = new TableLayoutPanel();
+        _iconPanel = new DarkSectionPanel();
+        _pic0Panel = new DarkSectionPanel();
+        _pic1Panel = new DarkSectionPanel();
+        _pic2Panel = new DarkSectionPanel();
+        _iconEmpty = new DarkLabel();
+        _pic0Empty = new DarkLabel();
+        _pic1Empty = new DarkLabel();
+        _pic2Empty = new DarkLabel();
+        _iconArtBox = new PictureBox();
+        _pic0Box = new PictureBox();
+        _pic1Box = new PictureBox();
+        _pic2Box = new PictureBox();
+        _iconArtMenu = new DarkContextMenu();
+        _pic0ArtMenu = new DarkContextMenu();
+        _pic1ArtMenu = new DarkContextMenu();
+        _pic2ArtMenu = new DarkContextMenu();
+        _iconArtSaveMenuItem = new ToolStripMenuItem();
+        _pic0ArtSaveMenuItem = new ToolStripMenuItem();
+        _pic1ArtSaveMenuItem = new ToolStripMenuItem();
+        _pic2ArtSaveMenuItem = new ToolStripMenuItem();
+        _iconPanel.SuspendLayout();
+        _pic0Panel.SuspendLayout();
+        _pic1Panel.SuspendLayout();
+        _pic2Panel.SuspendLayout();
+        _artworkLayout.SuspendLayout();
+
+        BuildArtworkPanel(_iconPanel, _iconEmpty, _iconArtBox, "ICON", "No icon image in this package.");
+        BuildArtworkPanel(_pic0Panel, _pic0Empty, _pic0Box, "PIC0", "No PIC0 image in this package.");
+        BuildArtworkPanel(_pic1Panel, _pic1Empty, _pic1Box, "PIC1", "No PIC1 image in this package.");
+        BuildArtworkPanel(_pic2Panel, _pic2Empty, _pic2Box, "PIC2", "No PIC2 image in this package.");
+        BuildArtworkContextMenu(_iconArtMenu, _iconArtSaveMenuItem, _iconArtBox, "ICON");
+        BuildArtworkContextMenu(_pic0ArtMenu, _pic0ArtSaveMenuItem, _pic0Box, "PIC0");
+        BuildArtworkContextMenu(_pic1ArtMenu, _pic1ArtSaveMenuItem, _pic1Box, "PIC1");
+        BuildArtworkContextMenu(_pic2ArtMenu, _pic2ArtSaveMenuItem, _pic2Box, "PIC2");
+
+        _artworkLayout.Dock = DockStyle.Fill;
+        _artworkLayout.ColumnCount = 2;
+        _artworkLayout.RowCount = 1;
+        _artworkLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        _artworkLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        _artworkLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        _artworkTab.Controls.Add(_artworkLayout);
+
+        _artworkLayout.ResumeLayout(false);
+        _pic2Panel.ResumeLayout(false);
+        _pic1Panel.ResumeLayout(false);
+        _pic0Panel.ResumeLayout(false);
+        _iconPanel.ResumeLayout(false);
     }
 
-    private void AttachArtworkMenu(PictureBox box, string slot)
+    private static void BuildArtworkPanel(DarkSectionPanel panel, DarkLabel empty, PictureBox box,
+        string header, string emptyText)
     {
-        var menu = new DarkContextMenu();
-        menu.Items.Add(MenuItem("Save image...", () => SaveArtworkSlot(box, slot)));
+        panel.SectionHeader = header;
+        panel.Dock = DockStyle.Fill;
+        panel.Padding = new Padding(12, 10, 12, 12);
+        empty.Text = emptyText;
+        empty.Dock = DockStyle.Fill;
+        empty.Font = new Font("Segoe UI", 9F, FontStyle.Italic);
+        empty.TextAlign = ContentAlignment.MiddleCenter;
+        box.Dock = DockStyle.Fill;
+        box.TabStop = false;
+        box.SizeMode = PictureBoxSizeMode.Zoom;
+        box.Visible = false;
+        panel.Controls.Add(empty);
+        panel.Controls.Add(box);
+    }
+
+    private void BuildArtworkContextMenu(DarkContextMenu menu, ToolStripMenuItem saveItem, PictureBox box, string slot)
+    {
+        ConfigureMenuItem(saveItem, "Save image...", Keys.None, (_, _) => SaveArtworkSlot(box, slot));
+        menu.Items.Add(saveItem);
         box.ContextMenuStrip = menu;
     }
 
     /// <summary>PS4 shows PIC0/PIC1; PS5 additionally shows the icon and PIC2 (all with placeholders).</summary>
     private TableLayoutPanel BuildArtworkLayout(bool isPs4)
     {
-        var table = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = isPs4 ? 1 : 2
-        };
+        var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = isPs4 ? 1 : 2 };
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
 
-        // Margins are assigned per layout: the reused panels must not keep the other layout's margins.
         if (isPs4)
         {
             table.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
@@ -664,19 +1113,6 @@ partial class PackageViewerForm
 
         _artworkLayout = table;
         return table;
-    }
-
-    private static void BuildArtworkPanel(DarkSectionPanel panel, DarkLabel empty, PictureBox box)
-    {
-        panel.Dock = DockStyle.Fill;
-        panel.Padding = new Padding(12, 10, 12, 12);
-        empty.Dock = DockStyle.Fill;
-        empty.Font = new Font("Segoe UI", 9F, FontStyle.Italic);
-        empty.TextAlign = ContentAlignment.MiddleCenter;
-        box.Dock = DockStyle.Fill;
-        box.TabStop = false;
-        panel.Controls.Add(empty);
-        panel.Controls.Add(box);
     }
 
     // ------------------------------------------------------------------
@@ -705,47 +1141,6 @@ partial class PackageViewerForm
         ReadOnly = true,
         Resizable = DataGridViewTriState.True
     };
-
-    private void BuildFileContextMenu()
-    {
-        _fileContextMenu.Items.Add(MenuItem("Preview", ActivateFileListItem));
-        _fileContextMenu.Items.Add(new DarkToolStripSeparator());
-        _fileContextMenu.Items.Add(MenuItem("Extract...", () => _ = ExtractSelectedAsync()));
-        _fileContextMenu.Items.Add(new DarkToolStripSeparator());
-        _fileContextMenu.Items.Add(MenuItem("Open containing folder", OpenContainingFolder));
-        _fileContextMenu.Items.Add(MenuItem("Copy path", CopySelectedPath));
-        _fileContextMenu.Items.Add(MenuItem("Copy filename", CopySelectedName));
-    }
-
-    /// <summary>
-    /// The folder-tree context menu, mirroring PS5 PKG Tool: preview/extract plus expand/collapse and
-    /// copy actions.
-    /// </summary>
-    private void BuildFileTreeContextMenu()
-    {
-        _treePreviewMenuItem = MenuItem("Preview", PreviewTreeNode);
-        _treeExtractMenuItem = MenuItem("Extract...", () => _ = ExtractTreeSelectionAsync());
-        _fileTreeContextMenu.Items.Add(_treePreviewMenuItem);
-        _fileTreeContextMenu.Items.Add(_treeExtractMenuItem);
-        _fileTreeContextMenu.Items.Add(new DarkToolStripSeparator());
-        _fileTreeContextMenu.Items.Add(MenuItem("Expand", () => _fileTree.SelectedNode?.Expand()));
-        _fileTreeContextMenu.Items.Add(MenuItem("Collapse", () => _fileTree.SelectedNode?.Collapse()));
-        _fileTreeContextMenu.Items.Add(MenuItem("Expand all", () => _fileTree.ExpandAll()));
-        _fileTreeContextMenu.Items.Add(MenuItem("Collapse all", () => _fileTree.CollapseAll()));
-        _fileTreeContextMenu.Items.Add(new DarkToolStripSeparator());
-        _fileTreeContextMenu.Items.Add(MenuItem("Copy path", CopySelectedTreePath));
-        _fileTreeContextMenu.Items.Add(MenuItem("Copy name", CopySelectedTreeName));
-        _fileTreeContextMenu.Opening += OnFileTreeContextOpening;
-    }
-
-    private void OnFileTreeContextOpening(object? sender, System.ComponentModel.CancelEventArgs e)
-    {
-        TreeNode? node = _fileTree.SelectedNode;
-        bool isFile = node?.Tag is PackageFileNode { IsDirectory: false };
-        bool hasFiles = node?.Tag is PackageFileNode model && (model.IsDirectory ? node.Nodes.Count > 0 : true);
-        if (_treePreviewMenuItem is not null) _treePreviewMenuItem.Enabled = isFile && !_busy;
-        if (_treeExtractMenuItem is not null) _treeExtractMenuItem.Enabled = hasFiles && !_busy;
-    }
 
     protected override void Dispose(bool disposing)
     {

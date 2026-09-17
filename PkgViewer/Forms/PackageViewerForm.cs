@@ -48,6 +48,7 @@ internal sealed partial class PackageViewerForm : DarkForm
     private int _previewVersion;
     private bool _closing;
     private TreeNode? _fileRootNode;
+    private DataGridView? _contextGrid;
     private string _lastExtractionDirectory;
     private readonly List<Image> _trophyImages = [];
     private readonly List<DarkTabPage> _detailTabPages = [];
@@ -61,7 +62,11 @@ internal sealed partial class PackageViewerForm : DarkForm
 
         InitializeComponent();
 
-        if (_previewPaneMenuItem is not null) _previewPaneMenuItem.Checked = _settings.PreviewPaneVisible;
+        // Runtime population of designer-created controls (image list images, summary rows).
+        FileIcons.Populate(_fileIcons);
+        InitializeOverviewRows();
+
+        _previewPaneMenuItem.Checked = _settings.PreviewPaneVisible;
         SetPreviewPaneVisible(_settings.PreviewPaneVisible);
         RestoreFileLayout();
     }
@@ -1438,28 +1443,6 @@ internal sealed partial class PackageViewerForm : DarkForm
         return scale > 0 ? (long)(amount * scale) : 0;
     }
 
-    private void AttachGridCopyMenu(DarkDataGridView grid)
-    {
-        var menu = new DarkContextMenu();
-        menu.Items.Add(MenuItem("Copy value", () => CopyGridValue(grid)));
-        menu.Items.Add(MenuItem("Copy row", () => CopyGridRow(grid)));
-        grid.CellContextMenuStripNeeded += (_, e) => e.ContextMenuStrip = menu;
-    }
-
-    private void CopyGridValue(DarkDataGridView grid)
-    {
-        if (grid.CurrentCell is { } cell)
-            CopyToClipboard(cell.Value?.ToString(), "Value");
-    }
-
-    private void CopyGridRow(DarkDataGridView grid)
-    {
-        if (grid.CurrentRow is not { } row) return;
-        string text = string.Join("\t", row.Cells.Cast<DataGridViewCell>()
-            .Select(cell => cell.Value?.ToString() ?? string.Empty));
-        CopyToClipboard(text, "Row");
-    }
-
     private void SelectTab(DarkTabPage page)
     {
         if (_tabs.TabPages.Contains(page)) _tabs.SelectedTab = page;
@@ -1578,16 +1561,16 @@ internal sealed partial class PackageViewerForm : DarkForm
     private void SetPreviewPaneVisible(bool visible)
     {
         if (_filesSplit is null) return;
-        bool present = _filesSplit.Panels.Contains(_previewPanel);
+        bool present = _filesSplit.Panels.Contains(_filesSplitPane3);
         if (visible && !present)
         {
-            _filesSplit.AddPanel(_previewPanel);
+            _filesSplit.AddPanel(_filesSplitPane3);
             if (_savedPreviewSplitSizes is { Length: 3 }) _filesSplit.PanelSizes = _savedPreviewSplitSizes;
         }
         else if (!visible && present)
         {
             _savedPreviewSplitSizes = _filesSplit.PanelSizes;
-            _filesSplit.RemovePanel(_previewPanel);
+            _filesSplit.RemovePanel(_filesSplitPane3);
         }
     }
 
@@ -2134,6 +2117,140 @@ internal sealed partial class PackageViewerForm : DarkForm
             unit++;
         } while (value >= 1024 && unit < units.Length - 1);
         return $"{value:0.##} {units[unit]}";
+    }
+
+    // ------------------------------------------------------------------
+    // Designer event handlers
+    // ------------------------------------------------------------------
+
+    private async void OnFormShown(object? sender, EventArgs e)
+    {
+        if (_shown) return;
+        _shown = true;
+        await LoadPackageAsync();
+    }
+
+    private async void OnTabsSelectedIndexChanged(object? sender, EventArgs e) => await OnTabSelectedAsync();
+
+    private void OnTitleDoubleClick(object? sender, EventArgs e) => CopyToClipboard(_titleLabel.Text, "Title");
+
+    private void OnOverviewValueDoubleClick(object? sender, EventArgs e)
+    {
+        if (sender is DarkLabel label) CopyToClipboard(label.Text, "Value");
+    }
+
+    private void OnStatusWarningsClick(object? sender, EventArgs e) => ShowWarnings();
+
+    private void OnStopExtractClick(object? sender, EventArgs e) => StopExtraction();
+
+    private void OnTrophyFilterChanged(object? sender, EventArgs e) => ApplyTrophyFilter();
+
+    private void OnFileFilterChanged(object? sender, EventArgs e) => RefreshFileList();
+
+    private void OnFileTreeAfterSelect(object? sender, TreeViewEventArgs e) => OnFileTreeNodeSelected();
+
+    private void OnFileListItemActivate(object? sender, EventArgs e) => ActivateFileListItem();
+
+    private void OnFileListSelectedIndexChanged(object? sender, EventArgs e) => UpdateFileActionState();
+
+    private void OnUpClick(object? sender, EventArgs e) => NavigateUp();
+
+    private void OnExtractSelectedClick(object? sender, EventArgs e) => _ = ExtractSelectedAsync();
+
+    private void OnExtractAllClick(object? sender, EventArgs e) => _ = ExtractFullAsync();
+
+    private void OnFileContextPreview(object? sender, EventArgs e) => ActivateFileListItem();
+    private void OnFileContextExtract(object? sender, EventArgs e) => _ = ExtractSelectedAsync();
+    private void OnFileContextOpenContaining(object? sender, EventArgs e) => OpenContainingFolder();
+    private void OnFileContextCopyPath(object? sender, EventArgs e) => CopySelectedPath();
+    private void OnFileContextCopyName(object? sender, EventArgs e) => CopySelectedName();
+
+    private void OnTreeContextPreview(object? sender, EventArgs e) => PreviewTreeNode();
+    private void OnTreeContextExtract(object? sender, EventArgs e) => _ = ExtractTreeSelectionAsync();
+    private void OnTreeContextExpand(object? sender, EventArgs e) => _fileTree.SelectedNode?.Expand();
+    private void OnTreeContextCollapse(object? sender, EventArgs e) => _fileTree.SelectedNode?.Collapse();
+    private void OnTreeContextExpandAll(object? sender, EventArgs e) => _fileTree.ExpandAll();
+    private void OnTreeContextCollapseAll(object? sender, EventArgs e) => _fileTree.CollapseAll();
+    private void OnTreeContextCopyPath(object? sender, EventArgs e) => CopySelectedTreePath();
+    private void OnTreeContextCopyName(object? sender, EventArgs e) => CopySelectedTreeName();
+
+    private void OnFileTreeContextOpening(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        TreeNode? node = _fileTree.SelectedNode;
+        bool isFile = node?.Tag is PackageFileNode { IsDirectory: false };
+        bool hasFiles = node?.Tag is PackageFileNode model && (model.IsDirectory ? node.Nodes.Count > 0 : true);
+        _treePreviewMenuItem.Enabled = isFile && !_busy;
+        _treeExtractMenuItem.Enabled = hasFiles && !_busy;
+    }
+
+    private void OnGridContextMenuNeeded(object? sender, DataGridViewCellContextMenuStripNeededEventArgs e)
+    {
+        _contextGrid = sender as DataGridView;
+        e.ContextMenuStrip = _gridContextMenu;
+    }
+
+    private void OnGridCopyValue(object? sender, EventArgs e)
+    {
+        if (_contextGrid?.CurrentCell is { } cell) CopyToClipboard(cell.Value?.ToString(), "Value");
+    }
+
+    private void OnGridCopyRow(object? sender, EventArgs e)
+    {
+        if (_contextGrid?.CurrentRow is not { } row) return;
+        string text = string.Join("\t", row.Cells.Cast<DataGridViewCell>()
+            .Select(cell => cell.Value?.ToString() ?? string.Empty));
+        CopyToClipboard(text, "Row");
+    }
+
+    private void OnDragEnterPackage(object? sender, DragEventArgs e)
+    {
+        if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true) e.Effect = DragDropEffects.Copy;
+    }
+
+    private void OnDragDropPackage(object? sender, DragEventArgs e)
+    {
+        if (e.Data?.GetData(DataFormats.FileDrop) is string[] { Length: > 0 } files)
+            OpenDroppedFile(files[0]);
+    }
+
+    private void OnMenuOpen(object? sender, EventArgs e) => OpenAnotherPackage();
+    private void OnMenuClose(object? sender, EventArgs e) => Close();
+    private void OnMenuExtractAll(object? sender, EventArgs e) => _ = ExtractFullAsync();
+    private void OnMenuSaveArtwork(object? sender, EventArgs e) => SaveArtwork();
+    private void OnMenuExportMetadata(object? sender, EventArgs e) => ExportMetadata();
+    private void OnMenuOpenSourceFolder(object? sender, EventArgs e) => OpenSourceFolder();
+    private void OnMenuExit(object? sender, EventArgs e) => Close();
+    private void OnMenuCopyTitle(object? sender, EventArgs e) => CopyInfo("title");
+    private void OnMenuCopyTitleId(object? sender, EventArgs e) => CopyInfo("title_id");
+    private void OnMenuCopyContentId(object? sender, EventArgs e) => CopyInfo("content_id");
+    private void OnMenuCopySourcePath(object? sender, EventArgs e) => CopySourcePath();
+    private void OnMenuFindFiles(object? sender, EventArgs e) => FocusFileSearch();
+    private void OnMenuViewOverview(object? sender, EventArgs e) => SelectTab(_overviewTab);
+    private void OnMenuViewFiles(object? sender, EventArgs e) => SelectTab(_filesTab);
+    private void OnMenuViewArtwork(object? sender, EventArgs e) => SelectTab(_artworkTab);
+    private void OnMenuViewTrophies(object? sender, EventArgs e) => SelectTab(_trophyTab);
+    private void OnMenuViewInternals(object? sender, EventArgs e) => SelectTab(_packageTab);
+    private void OnMenuPreviewPane(object? sender, EventArgs e) => TogglePreviewPane();
+    private void OnMenuResetLayout(object? sender, EventArgs e) => ResetLayout();
+    private void OnMenuRetryAccess(object? sender, EventArgs e) => _ = RetryContentAccessAsync();
+    private void OnMenuFileAssociations(object? sender, EventArgs e) => ShowAssociations();
+    private void OnMenuRemoveLegacy(object? sender, EventArgs e) => RemoveLegacyIntegration();
+    private void OnMenuOpenLogFolder(object? sender, EventArgs e) => OpenLogFolder();
+    private void OnMenuCopyDiagnostics(object? sender, EventArgs e) => CopyDiagnostics();
+    private void OnMenuAbout(object? sender, EventArgs e) => new AboutForm().ShowDialog(this);
+    private void OnMenuSupport(object? sender, EventArgs e) => OpenCoffeeLink();
+
+    /// <summary>Adds the fixed Package Summary rows to the designer-created summary table.</summary>
+    private void InitializeOverviewRows()
+    {
+        if (_overviewSummaryTable is null) return;
+        string[] captions =
+        [
+            "Title", "Title ID", "Content ID", "Category", "Region", "Package state",
+            "Application version", "Package version", "Required firmware", "Package size"
+        ];
+        foreach (string caption in captions)
+            AddOverviewRow(_overviewSummaryTable, caption, bold: caption == "Title");
     }
 
     private sealed record PreviewResult(Image? Image, string? Text, string? Message);

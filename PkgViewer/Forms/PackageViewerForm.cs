@@ -65,9 +65,9 @@ internal sealed partial class PackageViewerForm : DarkForm
 
         InitializeComponent();
 
-        // Runtime population of designer-created controls (image list images, summary rows).
+        // Runtime population of designer-created controls (image list images).
         FileIcons.Populate(_fileIcons);
-        InitializeOverviewRows();
+        _overviewSummary.ValueCopyRequested += (caption, value) => CopyToClipboard(value, caption);
 
         _fileSearchDebounce.Tick += (_, _) =>
         {
@@ -173,6 +173,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         SetImage(_iconBox, _session.Artwork.Icon);
         PopulateArtwork();
 
+        _overviewSummary.ClearRows();
         SetOverviewValue("Title", info.Title);
         SetOverviewValue("Title ID", info.TitleId);
         SetOverviewValue("Content ID", info.ContentId);
@@ -486,49 +487,14 @@ internal sealed partial class PackageViewerForm : DarkForm
         empty.Visible = !hasImage;
     }
 
-    private const int FixedOverviewRows = 10;
+    private void SetOverviewValue(string key, string value) =>
+        _overviewSummary.SetRow(key, string.IsNullOrWhiteSpace(value) ? "Not available" : value);
 
-    private void SetOverviewValue(string key, string value)
-    {
-        DarkLabel label = _overviewValues[key];
-        label.Text = string.IsNullOrWhiteSpace(value) ? "Not available" : value;
-        _toolTip.SetToolTip(label, label.Text);
-    }
-
-    /// <summary>
-    /// Appends the backend's format-specific fields beneath the fixed nine summary rows, replacing any
-    /// extras from a previously open package. Values are copyable on double-click.
-    /// </summary>
+    /// <summary>Adds the backend's format-specific fields beneath the fixed summary rows.</summary>
     private void AppendOverviewExtras(IReadOnlyList<PackageInfoRow> rows)
     {
-        if (_overviewSummaryTable is not { } table) return;
-        table.SuspendLayout();
-        try
-        {
-            for (int index = table.RowCount - 1; index >= FixedOverviewRows; index--)
-            {
-                for (int column = 0; column < table.ColumnCount; column++)
-                {
-                    Control? control = table.GetControlFromPosition(column, index);
-                    if (control is null) continue;
-                    table.Controls.Remove(control);
-                    control.Dispose();
-                }
-                if (index < table.RowStyles.Count) table.RowStyles.RemoveAt(index);
-                table.RowCount = index;
-            }
-
-            foreach (PackageInfoRow row in rows)
-            {
-                DarkLabel value = AddOverviewRow(table, row.Label, bold: false, track: false);
-                value.Text = row.Value;
-                _toolTip.SetToolTip(value, row.Value);
-            }
-        }
-        finally
-        {
-            table.ResumeLayout(true);
-        }
+        foreach (PackageInfoRow row in rows)
+            _overviewSummary.SetRow(row.Label, row.Value);
     }
 
     private static void PopulateInspectionGrid(DarkDataGridView grid, IReadOnlyList<PackageInfoRow> rows, string emptyLabel)
@@ -2224,11 +2190,6 @@ internal sealed partial class PackageViewerForm : DarkForm
 
     private void OnTitleDoubleClick(object? sender, EventArgs e) => CopyToClipboard(_titleLabel.Text, "Title");
 
-    private void OnOverviewValueDoubleClick(object? sender, EventArgs e)
-    {
-        if (sender is DarkLabel label) CopyToClipboard(label.Text, "Value");
-    }
-
     private void OnStatusWarningsClick(object? sender, EventArgs e) => ShowWarnings();
 
     private void OnStopExtractClick(object? sender, EventArgs e) => StopExtraction();
@@ -2343,18 +2304,7 @@ internal sealed partial class PackageViewerForm : DarkForm
     private void OnMenuKofi(object? sender, EventArgs e) => OpenExternalUrl(KoFiUrl);
     private void OnMenuPaypal(object? sender, EventArgs e) => OpenExternalUrl(PayPalUrl);
 
-    /// <summary>Adds the fixed Package Summary rows to the designer-created summary table.</summary>
-    private void InitializeOverviewRows()
-    {
-        if (_overviewSummaryTable is null) return;
-        string[] captions =
-        [
-            "Title", "Title ID", "Content ID", "Category", "Region", "Package state",
-            "Application version", "Package version", "Required firmware", "Package size"
-        ];
-        foreach (string caption in captions)
-            AddOverviewRow(_overviewSummaryTable, caption, bold: caption == "Title");
-    }
+
 
     private sealed record PreviewResult(Image? Image, string? Text, string? Message);
 }

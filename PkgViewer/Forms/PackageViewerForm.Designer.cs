@@ -78,17 +78,15 @@ partial class PackageViewerForm
     private DarkTabPage _artworkTab = null!;
 
     // Overview
-    private TableLayoutPanel _overviewLayout = null!;
+    private DarkTableLayoutPanel _overviewLayout = null!;
     private DarkSectionPanel _overviewPanel = null!;
-    private Panel _overviewSummaryHost = null!;
-    private TableLayoutPanel _overviewSummaryTable = null!;
+    private OverviewSummaryView _overviewSummary = null!;
     private DarkSectionPanel _sfoPanel = null!;
     private DarkDataGridView _sfoGrid = null!;
     private DataGridViewTextBoxColumn _sfoKeyColumn = null!;
     private DataGridViewTextBoxColumn _sfoValueColumn = null!;
     private DarkSectionPanel _paramJsonPanel = null!;
     private DarkTreeView _paramJsonTree = null!;
-    private Dictionary<string, DarkLabel> _overviewValues = null!;
     private ToolTip _toolTip = null!;
 
     // PKG Internals
@@ -122,8 +120,8 @@ partial class PackageViewerForm
     private DataGridViewTextBoxColumn _trophyHiddenColumn = null!;
 
     // File browser
-    private TableLayoutPanel _filesLayout = null!;
-    private TableLayoutPanel _filesToolbar = null!;
+    private DarkTableLayoutPanel _filesLayout = null!;
+    private DarkTableLayoutPanel _filesToolbar = null!;
     private DarkLabel _fileBreadcrumb = null!;
     private DarkButton _upButton = null!;
     private DarkButton _extractSelectedButton = null!;
@@ -156,12 +154,12 @@ partial class PackageViewerForm
     private ToolStripMenuItem _gridCopyRowMenuItem = null!;
     private DarkSectionPanel _previewPanel = null!;
     private DarkLabel _previewInfo = null!;
-    private Panel _previewBody = null!;
+    private DarkPanel _previewBody = null!;
     private PictureBox _previewImage = null!;
     private DarkTextBox _previewText = null!;
 
     // Artwork
-    private TableLayoutPanel _artworkLayout = null!;
+    private DarkTableLayoutPanel _artworkLayout = null!;
     private DarkSectionPanel _iconPanel = null!;
     private DarkSectionPanel _pic0Panel = null!;
     private DarkSectionPanel _pic1Panel = null!;
@@ -475,42 +473,28 @@ partial class PackageViewerForm
 
     private void BuildOverviewTab()
     {
-        _overviewLayout = new TableLayoutPanel();
+        _overviewLayout = new DarkTableLayoutPanel();
         _overviewPanel = new DarkSectionPanel();
-        _overviewSummaryHost = new Panel();
-        _overviewSummaryTable = new TableLayoutPanel();
+        _overviewSummary = new OverviewSummaryView();
         _sfoPanel = new DarkSectionPanel();
         _sfoGrid = new DarkDataGridView();
         _sfoKeyColumn = new DataGridViewTextBoxColumn();
         _sfoValueColumn = new DataGridViewTextBoxColumn();
         _paramJsonPanel = new DarkSectionPanel();
         _paramJsonTree = new DarkTreeView();
-        _overviewSummaryHost.SuspendLayout();
         _overviewPanel.SuspendLayout();
         _sfoPanel.SuspendLayout();
         _paramJsonPanel.SuspendLayout();
         ((System.ComponentModel.ISupportInitialize)_sfoGrid).BeginInit();
         _overviewLayout.SuspendLayout();
 
-        _overviewSummaryTable.Dock = DockStyle.Top;
-        _overviewSummaryTable.ColumnCount = 2;
-        _overviewSummaryTable.RowCount = 0;
-        _overviewSummaryTable.AutoSize = true;
-        _overviewSummaryTable.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        _overviewSummaryTable.Margin = new Padding(0);
-        _overviewSummaryTable.Padding = new Padding(0);
-        _overviewSummaryTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140F));
-        _overviewSummaryTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _overviewSummaryHost.Dock = DockStyle.Fill;
-        _overviewSummaryHost.AutoScroll = true;
-        _overviewSummaryHost.Padding = new Padding(0);
-        _overviewSummaryHost.Controls.Add(_overviewSummaryTable);
+        _overviewSummary.Dock = DockStyle.Fill;
 
         _overviewPanel.SectionHeader = "Package Summary";
         _overviewPanel.Dock = DockStyle.Fill;
         _overviewPanel.Margin = new Padding(0, 0, 6, 0);
         _overviewPanel.Padding = new Padding(16, 12, 16, 16);
-        _overviewPanel.Controls.Add(_overviewSummaryHost);
+        _overviewPanel.Controls.Add(_overviewSummary);
 
         SetupGrid(_sfoGrid);
         _sfoKeyColumn.Name = "Key";
@@ -545,7 +529,6 @@ partial class PackageViewerForm
         _overviewLayout.Controls.Add(_overviewPanel, 0, 0);
         _overviewLayout.Controls.Add(_sfoPanel, 1, 0);
 
-        _overviewValues = new Dictionary<string, DarkLabel>(StringComparer.Ordinal);
         _overviewTab.Controls.Add(_overviewLayout);
 
         _overviewLayout.ResumeLayout(false);
@@ -553,43 +536,6 @@ partial class PackageViewerForm
         _paramJsonPanel.ResumeLayout(false);
         _sfoPanel.ResumeLayout(false);
         _overviewPanel.ResumeLayout(false);
-        _overviewSummaryHost.ResumeLayout(false);
-    }
-
-    /// <summary>Adds one auto-sized caption/value row to the summary table and returns the value label.</summary>
-    private DarkLabel AddOverviewRow(TableLayoutPanel table, string caption, bool bold = false, bool track = true)
-    {
-        int index = table.RowCount;
-        table.RowCount = index + 1;
-        table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-        var captionLabel = new DarkLabel
-        {
-            Text = caption,
-            AutoSize = false,
-            Height = 22,
-            Dock = DockStyle.Fill,
-            Margin = new Padding(3),
-            TextAlign = ContentAlignment.MiddleLeft
-        };
-        var value = new DarkLabel
-        {
-            Text = "Not available",
-            AutoSize = false,
-            Height = 22,
-            Dock = DockStyle.Fill,
-            Margin = new Padding(3),
-            TextAlign = ContentAlignment.MiddleLeft,
-            AutoEllipsis = true,
-            Cursor = Cursors.Hand,
-            Font = bold ? new Font("Segoe UI", 9F, FontStyle.Bold) : new Font("Segoe UI", 9F)
-        };
-        value.DoubleClick += OnOverviewValueDoubleClick;
-        if (track) _overviewValues[caption] = value;
-
-        table.Controls.Add(captionLabel, 0, index);
-        table.Controls.Add(value, 1, index);
-        return value;
     }
 
     // ------------------------------------------------------------------
@@ -810,7 +756,7 @@ partial class PackageViewerForm
         _treeCopyNameMenuItem = new ToolStripMenuItem();
         _previewImage = new PictureBox();
         _previewText = new DarkTextBox();
-        _previewBody = new Panel();
+        _previewBody = new DarkPanel();
         _previewInfo = new DarkLabel();
         _previewPanel = new DarkSectionPanel();
         _filesSplitPane1 = new DarkSplitPane();
@@ -821,9 +767,9 @@ partial class PackageViewerForm
         _upButton = new DarkButton();
         _extractSelectedButton = new DarkButton();
         _extractAllButton = new DarkButton();
-        _filesToolbar = new TableLayoutPanel();
+        _filesToolbar = new DarkTableLayoutPanel();
         _fileFilter = new DarkSearchBox();
-        _filesLayout = new TableLayoutPanel();
+        _filesLayout = new DarkTableLayoutPanel();
         _filesSplit.SuspendLayout();
         _filesSplitPane1.SuspendLayout();
         _filesSplitPane2.SuspendLayout();
@@ -1014,7 +960,7 @@ partial class PackageViewerForm
 
     private void BuildArtworkTab()
     {
-        _artworkLayout = new TableLayoutPanel();
+        _artworkLayout = new DarkTableLayoutPanel();
         _iconPanel = new DarkSectionPanel();
         _pic0Panel = new DarkSectionPanel();
         _pic1Panel = new DarkSectionPanel();
@@ -1091,9 +1037,9 @@ partial class PackageViewerForm
     }
 
     /// <summary>PS4 shows PIC0/PIC1; PS5 additionally shows the icon and PIC2 (all with placeholders).</summary>
-    private TableLayoutPanel BuildArtworkLayout(bool isPs4)
+    private DarkTableLayoutPanel BuildArtworkLayout(bool isPs4)
     {
-        var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = isPs4 ? 1 : 2 };
+        var table = new DarkTableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = isPs4 ? 1 : 2 };
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
 

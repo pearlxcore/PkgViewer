@@ -937,6 +937,13 @@ internal sealed partial class PackageViewerForm : DarkForm
         }
     }
 
+    /// <summary>Extensions that are always shown as a hex dump rather than guessed as text.</summary>
+    private static readonly HashSet<string> BinaryPreviewExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".bin", ".self", ".elf", ".prx", ".sprx", ".dll", ".exe", ".so", ".o", ".a",
+        ".pkg", ".at9", ".acb", ".awb", ".sbk", ".sdat", ".edat", ".ag", ".uexp", ".uasset", ".ucas", ".utoc"
+    };
+
     private PreviewResult BuildPreview(string path, long size, CancellationToken token)
     {
         if (_session is null) return new PreviewResult(null, null, "No package is open.");
@@ -967,6 +974,16 @@ internal sealed partial class PackageViewerForm : DarkForm
                 return new PreviewResult(null, null,
                     $"The image is too large to decode ({width}x{height}). Use Extract.");
             return new PreviewResult(BitmapFromRgba(rgba, width, height), null, null);
+        }
+
+        // Known binary types go straight to a hex dump.
+        if (BinaryPreviewExtensions.Contains(extension))
+        {
+            byte[] binary = ReadAtMost(stream, MaximumHexBytes);
+            string binaryHeader = size > binary.Length
+                ? $"[hex preview: first {FormatByteSize(binary.Length)} of {FormatByteSize(size)}]{Environment.NewLine}"
+                : string.Empty;
+            return new PreviewResult(null, binaryHeader + BuildHexDump(binary), null);
         }
 
         // Classify from a small sample first so a binary file is not read up to the full text budget
@@ -1018,21 +1035,31 @@ internal sealed partial class PackageViewerForm : DarkForm
         if (buffer.Length >= 2 && buffer[0] == 0xFE && buffer[1] == 0xFF) { encoding = Encoding.BigEndianUnicode; return true; }
 
         int limit = Math.Min(buffer.Length, 4096);
-        int nulls = 0, oddNulls = 0, evenNulls = 0;
+        int nulls = 0, oddNulls = 0, evenNulls = 0, nonPrintable = 0;
         for (int index = 0; index < limit; index++)
         {
-            if (buffer[index] != 0) continue;
-            nulls++;
-            if ((index & 1) == 0) evenNulls++;
-            else oddNulls++;
+            byte value = buffer[index];
+            if (value == 0)
+            {
+                nulls++;
+                if ((index & 1) == 0) evenNulls++;
+                else oddNulls++;
+            }
+            else if (value < 0x09 || (value > 0x0D && value < 0x20) || value == 0x7F)
+            {
+                nonPrintable++;
+            }
         }
-        if (nulls == 0) return true;
+
+        // UTF-16 text: many null bytes alternating on one side.
         if (nulls > limit * 0.1 && (oddNulls > limit * 0.3 || evenNulls > limit * 0.3))
         {
             encoding = oddNulls >= evenNulls ? Encoding.Unicode : Encoding.BigEndianUnicode;
             return true;
         }
-        return false;
+
+        // Otherwise treat it as text only when it has no nulls and few control characters.
+        return nulls == 0 && nonPrintable <= limit * 0.1;
     }
 
     // ------------------------------------------------------------------

@@ -53,12 +53,20 @@ no library management or builder UI was added.
   visibility and last extraction folder; the window is resizable.
 - Menus reworked to File / Edit / View / Tools / Help; the nonfunctional "Check for update" command
   was removed.
+- **Drag-and-drop** opening (drop a package on the window).
+- **Preview** detects UTF-8/UTF-16 (BOM and heuristics), labels truncated text/hex with the shown vs
+  total size, and rejects decoded images above a pixel cap.
+- **Overview** renders backend extra rows beneath the fixed summary, with copyable values and
+  tooltips; the header title ellipsizes, copies on double-click and has a tooltip.
+- **Internals** columns are named, Offset/Size are right-aligned and sort numerically by header click,
+  and every grid offers Copy value / Copy row.
+- **Trophies** gain a filter box and match counts.
+- **Artwork** slots gain per-slot Save image and dimension tooltips.
 
 ## Deliberately not done
 
-- Drag-and-drop opening, a preview-on-selection delay, and text-encoding detection/choice.
-- Decoded-image dimension/memory caps beyond the existing size ceiling.
-- Backend capability-driven command enabling.
+- A preview-on-selection delay (preview stays on activation).
+- Backend capability-driven command enabling (PkgViewer's backends expose no capability flags).
 - No user-facing Settings dialog (view state is remembered automatically).
 
 ## Verification

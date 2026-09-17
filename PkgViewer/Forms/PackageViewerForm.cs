@@ -937,8 +937,8 @@ internal sealed partial class PackageViewerForm : DarkForm
         }
     }
 
-    /// <summary>Extensions rendered as text when they also pass the text heuristic. Everything else —
-    /// including unknown extensions — defaults to a hex dump.</summary>
+    /// <summary>Extensions rendered as text when they also pass the text heuristic. Everything else,
+    /// including unknown extensions, defaults to a hex dump.</summary>
     private static readonly HashSet<string> TextPreviewExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".txt", ".text", ".log", ".json", ".xml", ".sfo", ".ini", ".cfg", ".conf", ".csv", ".md",

@@ -725,11 +725,11 @@ partial class PackageViewerForm
         _trophyFilter.Height = 30;
         _trophyFilter.SearchTextChanged += OnTrophyFilterChanged;
 
+        // Dock order is deliberate: the Fill grid is added first so the Top controls (filter, then
+        // state) claim their edges above it. BringToFront would reverse that and overlap them.
         _trophyTab.Controls.Add(_trophyGrid);
         _trophyTab.Controls.Add(_trophyState);
         _trophyTab.Controls.Add(_trophyFilter);
-        _trophyState.BringToFront();
-        _trophyFilter.BringToFront();
 
         ((System.ComponentModel.ISupportInitialize)_trophyGrid).EndInit();
     }
@@ -874,9 +874,9 @@ partial class PackageViewerForm
         _previewInfo.TextAlign = ContentAlignment.MiddleLeft;
         _previewPanel.SectionHeader = "File Preview";
         _previewPanel.Dock = DockStyle.Fill;
+        // Fill body first, then the header label: the header docks to the top without overlapping.
         _previewPanel.Controls.Add(_previewBody);
         _previewPanel.Controls.Add(_previewInfo);
-        _previewInfo.BringToFront();
 
         _filesSplitPane1.Controls.Add(_fileTree);
         _filesSplitPane2.Controls.Add(_fileList);

@@ -61,7 +61,6 @@ internal sealed partial class PackageViewerForm : DarkForm
         _currentPackagePath = Path.GetFullPath(packagePath);
         _lastExtractionDirectory = _settings.LastExtractionDirectory;
         AppIcon.Apply(this);
-        ApplyWindowBounds();
 
         InitializeComponent();
 
@@ -77,13 +76,6 @@ internal sealed partial class PackageViewerForm : DarkForm
         _previewPaneMenuItem.Checked = _settings.PreviewPaneVisible;
         SetPreviewPaneVisible(_settings.PreviewPaneVisible);
         RestoreFileLayout();
-    }
-
-    private void ApplyWindowBounds()
-    {
-        if (_settings.WindowWidth >= 800 && _settings.WindowHeight >= 560)
-            ClientSize = new Size(_settings.WindowWidth, _settings.WindowHeight);
-        if (_settings.WindowMaximized) WindowState = FormWindowState.Maximized;
     }
 
     private async Task OnTabSelectedAsync()

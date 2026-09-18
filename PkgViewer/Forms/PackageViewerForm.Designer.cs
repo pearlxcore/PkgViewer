@@ -415,10 +415,9 @@ partial class PackageViewerForm
         // ---------------- Form ----------------
         AutoScaleMode = AutoScaleMode.Font;
         Text = "Pkg Viewer";
-        FormBorderStyle = FormBorderStyle.Sizable;
-        MaximizeBox = true;
+        FormBorderStyle = FormBorderStyle.FixedSingle;
+        MaximizeBox = false;
         MinimizeBox = true;
-        MinimumSize = new Size(860, 560);
         ClientSize = new Size(1100, 680);
         StartPosition = FormStartPosition.CenterScreen;
         AllowDrop = true;

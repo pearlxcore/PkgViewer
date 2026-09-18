@@ -16,7 +16,7 @@ partial class AboutForm
     private DarkLabel lblLicense = null!;
     private DarkButton btnGitHub = null!;
     private DarkButton btnKofi = null!;
-    private DarkButton btnPayPal = null!;
+    private DarkButton btnBug = null!;
     private DarkButton btnClose = null!;
 
     protected override void Dispose(bool disposing)
@@ -36,7 +36,7 @@ partial class AboutForm
         lblLicense = new DarkLabel();
         btnGitHub = new DarkButton();
         btnKofi = new DarkButton();
-        btnPayPal = new DarkButton();
+        btnBug = new DarkButton();
         btnClose = new DarkButton();
         ((System.ComponentModel.ISupportInitialize)picAppIcon).BeginInit();
         SuspendLayout();
@@ -91,12 +91,12 @@ partial class AboutForm
         btnKofi.Text = "Ko-fi";
         btnKofi.Click += btnKofi_Click;
 
-        btnPayPal.Font = new Font("Segoe UI", 9F);
-        btnPayPal.Location = new Point(204, 182);
-        btnPayPal.Name = "btnPayPal";
-        btnPayPal.Size = new Size(95, 30);
-        btnPayPal.Text = "PayPal";
-        btnPayPal.Click += btnPayPal_Click;
+        btnBug.Font = new Font("Segoe UI", 9F);
+        btnBug.Location = new Point(204, 182);
+        btnBug.Name = "btnBug";
+        btnBug.Size = new Size(95, 30);
+        btnBug.Text = "Report Bug";
+        btnBug.Click += btnBug_Click;
 
         btnClose.Font = new Font("Segoe UI", 9F);
         btnClose.Location = new Point(306, 182);
@@ -109,7 +109,7 @@ partial class AboutForm
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(411, 224);
         Controls.Add(btnClose);
-        Controls.Add(btnPayPal);
+        Controls.Add(btnBug);
         Controls.Add(btnKofi);
         Controls.Add(btnGitHub);
         Controls.Add(lblLicense);

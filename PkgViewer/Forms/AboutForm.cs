@@ -5,9 +5,9 @@ namespace PkgViewer.Forms;
 /// <summary>About window mirroring PS5 PKG Tool: icon, identity, credits and support links.</summary>
 internal sealed partial class AboutForm : DarkUI.Forms.DarkForm
 {
-    private const string GitHubUrl = "https://github.com/pearlxcore";
+    private const string GitHubUrl = "https://github.com/pearlxcore/PkgViewer";
     private const string KoFiUrl = "https://ko-fi.com/R6R524N7X";
-    private const string PayPalUrl = "https://www.paypal.com/paypalme/pearlxcoree";
+    private const string IssuesUrl = "https://github.com/pearlxcore/PkgViewer/issues";
 
     public AboutForm(string version)
     {
@@ -25,7 +25,7 @@ internal sealed partial class AboutForm : DarkUI.Forms.DarkForm
 
     private void btnKofi_Click(object? sender, EventArgs e) => Open(KoFiUrl);
 
-    private void btnPayPal_Click(object? sender, EventArgs e) => Open(PayPalUrl);
+    private void btnBug_Click(object? sender, EventArgs e) => Open(IssuesUrl);
 
     private void btnClose_Click(object? sender, EventArgs e) => Close();
 

@@ -1,5 +1,7 @@
 # Pkg Viewer
 
+<img width="1102" height="712" alt="image" src="https://github.com/user-attachments/assets/c953ce1c-b4db-430a-8e2f-a08c9ed5b71b" />
+
 A quick little viewer for PS4 and PS5 packages. Open a package or an image, poke around inside, preview files, and grab what you need - without opening the full PS4/PS5 PKG Tool.
 
 # Support My Work

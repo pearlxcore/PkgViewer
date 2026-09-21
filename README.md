@@ -38,7 +38,7 @@ The release is a single `PkgViewer.exe` with everything it needs bundled in - no
 
 # Download
 
-Grab the latest `PkgViewer-v1.1.0.zip` from the [releases page](https://github.com/pearlxcore/PkgViewer/releases/latest), unzip it, and run `PkgViewer.exe`.
+Grab the latest version from the [releases page](https://github.com/pearlxcore/PkgViewer/releases/latest), unzip it, and run `PkgViewer.exe`.
 
 # Build
 

@@ -2337,7 +2337,7 @@ internal sealed partial class PackageViewerForm : DarkForm
     private static string AppVersion()
     {
         Version? version = typeof(PackageViewerForm).Assembly.GetName().Version;
-        if (version is null) return "1.0.0";
+        if (version is null) return "1.1.0";
         return version.Build >= 0 ? $"{version.Major}.{version.Minor}.{version.Build}" : $"{version.Major}.{version.Minor}";
     }
     private void OnMenuKofi(object? sender, EventArgs e) => OpenExternalUrl(KoFiUrl);

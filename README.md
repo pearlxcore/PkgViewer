@@ -19,6 +19,7 @@ The release is a single `PkgViewer.exe` with everything it needs bundled in - no
 # Features
 
 - Open PS4 `.pkg`, PS5 `.pkg`, and `.ffpfsc`, `.ffpkg`, `.exfat` images.
+- Reads community/plaintext (no-auth) PS5 FPKGs as well as standard debug packages.
 - A clean overview: title, IDs, version, size, region and more, plus the raw PARAM.SFO / param.json.
 - Container internals for packages, and Activities / Executable tabs for PS5.
 - Trophies with icons and details, and an Artwork tab for the icon and backgrounds.
@@ -37,7 +38,7 @@ The release is a single `PkgViewer.exe` with everything it needs bundled in - no
 
 # Download
 
-Grab the latest `PkgViewer-v1.0.0.zip` from the [releases page](https://github.com/pearlxcore/PkgViewer/releases/latest), unzip it, and run `PkgViewer.exe`.
+Grab the latest `PkgViewer-v1.1.0.zip` from the [releases page](https://github.com/pearlxcore/PkgViewer/releases/latest), unzip it, and run `PkgViewer.exe`.
 
 # Build
 

@@ -57,7 +57,7 @@ partial class AboutForm
         lblVersion.Location = new Point(100, 46);
         lblVersion.Name = "lblVersion";
         lblVersion.Size = new Size(300, 20);
-        lblVersion.Text = "Version 1.0.0";
+        lblVersion.Text = "Version 1.1.0";
 
         lblCopyright.Font = new Font("Segoe UI", 9F);
         lblCopyright.Location = new Point(100, 66);

@@ -1,6 +1,6 @@
 # Pkg Viewer
 
-<img width="1102" height="712" alt="image" src="https://github.com/user-attachments/assets/c953ce1c-b4db-430a-8e2f-a08c9ed5b71b" />
+<img width="1102" height="712" alt="image" src="https://github.com/pearlxcore/PkgViewer/blob/master/screenshot1.png" />
 
 A quick little viewer for PS4 and PS5 packages. Open a package or an image, poke around inside, preview files, and grab what you need - without opening the full PS4/PS5 PKG Tool.
 
@@ -49,11 +49,10 @@ dotnet build .\PkgViewer.slnx -c Release
 
 # Screenshots
 
-<img width="1102" height="712" alt="image" src="https://github.com/user-attachments/assets/336b1389-f716-4d50-8a50-b7c83fb28b1f" />
-<img width="1102" height="712" alt="image" src="https://github.com/user-attachments/assets/60947ca2-80d9-46b2-8db7-c00160de3ad5" />
-<img width="1102" height="712" alt="image" src="https://github.com/user-attachments/assets/ec03f0d4-e2ee-4457-b13a-2af70dc63f68" />
-<img width="1102" height="712" alt="image" src="https://github.com/user-attachments/assets/299716c9-e6bf-46fa-8b20-c6b13e05e35e" />
-
+<img width="1102" height="712" alt="image" src="https://github.com/pearlxcore/PkgViewer/blob/master/screenshot1.png" />
+<img width="1102" height="712" alt="image" src="https://github.com/pearlxcore/PkgViewer/blob/master/screenshot2.png" />
+<img width="1102" height="712" alt="image" src="https://github.com/pearlxcore/PkgViewer/blob/master/screenshot3.png" />
+<img width="1102" height="712" alt="image" src="https://github.com/pearlxcore/PkgViewer/blob/master/screenshot4.png" />
 
 # License
 

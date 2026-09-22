@@ -28,6 +28,8 @@ The release is a single `PkgViewer.exe` with everything it needs bundled in - no
 - Save artwork, or export a metadata report.
 - Recent files, a remembered window/column layout, and an optional file-type association.
 - Dark, tidy interface (DarkUI).
+- Theme selector in the header: choose any built-in theme, or follow PS5 PKG Tool's theme until you pick your own.
+- Check for updates from the Help menu, with an optional automatic check on startup.
 
 # How To Use
 

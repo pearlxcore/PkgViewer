@@ -32,6 +32,15 @@ internal sealed class AppSettings
     public bool PreviewPaneVisible { get; set; } = true;
     public string LastExtractionDirectory { get; set; } = string.Empty;
 
+    /// <summary>
+    /// DarkUI theme name chosen in PkgViewer. Empty means "follow PS5 PKG Tool's theme" until the
+    /// user picks a theme in the header selector.
+    /// </summary>
+    public string Theme { get; set; } = string.Empty;
+
+    /// <summary>Check GitHub for a newer release when the viewer starts.</summary>
+    public bool CheckUpdatesOnStartup { get; set; } = true;
+
     public static AppSettings Load()
     {
         try
@@ -42,6 +51,7 @@ internal sealed class AppSettings
             settings.FilesSplitterSizes ??= string.Empty;
             settings.FileColumnWidths ??= string.Empty;
             settings.LastExtractionDirectory ??= string.Empty;
+            settings.Theme ??= string.Empty;
             return settings;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)

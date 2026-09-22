@@ -17,6 +17,7 @@ partial class PackageViewerForm
     private DarkLabel _titleLabel = null!;
     private DarkLabel _subtitleLabel = null!;
     private DarkLabel _contentIdLabel = null!;
+    private DarkComboBox _themeCombo = null!;
 
     // Menu
     private DarkMenuStrip _menu = null!;
@@ -50,6 +51,8 @@ partial class PackageViewerForm
     private ToolStripMenuItem _openLogFolderMenuItem = null!;
     private ToolStripMenuItem _copyDiagnosticsMenuItem = null!;
     private ToolStripMenuItem _aboutMenuItem = null!;
+    private ToolStripMenuItem _checkUpdatesMenuItem = null!;
+    private ToolStripMenuItem _checkUpdatesOnStartupMenuItem = null!;
     private ToolStripMenuItem _kofiMenuItem = null!;
     private ToolStripMenuItem _paypalMenuItem = null!;
     private DarkToolStripSeparator _fileSeparator1 = null!;
@@ -192,6 +195,7 @@ partial class PackageViewerForm
         _titleLabel = new DarkLabel();
         _subtitleLabel = new DarkLabel();
         _contentIdLabel = new DarkLabel();
+        _themeCombo = new DarkComboBox();
         _headerPanel.SuspendLayout();
         SuspendLayout();
 
@@ -199,6 +203,7 @@ partial class PackageViewerForm
         _headerPanel.Dock = DockStyle.Top;
         _headerPanel.Height = 104;
         _headerPanel.Padding = new Padding(16, 12, 16, 12);
+        _headerPanel.Resize += OnHeaderPanelResize;
 
         _iconBox.Location = new Point(16, 10);
         _iconBox.Size = new Size(84, 84);
@@ -225,6 +230,15 @@ partial class PackageViewerForm
         _contentIdLabel.Location = new Point(118, 66);
         _contentIdLabel.Size = new Size(680, 17);
 
+        _themeCombo.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        _themeCombo.DropDownStyle = ComboBoxStyle.DropDownList;
+        _themeCombo.Location = new Point(834, 12);
+        _themeCombo.Name = "_themeCombo";
+        _themeCombo.Size = new Size(250, 24);
+        _themeCombo.TabIndex = 0;
+        _themeCombo.SelectedIndexChanged += OnThemeSelected;
+
+        _headerPanel.Controls.Add(_themeCombo);
         _headerPanel.Controls.Add(_contentIdLabel);
         _headerPanel.Controls.Add(_subtitleLabel);
         _headerPanel.Controls.Add(_titleLabel);
@@ -268,6 +282,8 @@ partial class PackageViewerForm
         _copyDiagnosticsMenuItem = new ToolStripMenuItem();
         _helpSeparator = new DarkToolStripSeparator();
         _aboutMenuItem = new ToolStripMenuItem();
+        _checkUpdatesMenuItem = new ToolStripMenuItem();
+        _checkUpdatesOnStartupMenuItem = new ToolStripMenuItem();
         _kofiMenuItem = new ToolStripMenuItem();
         _paypalMenuItem = new ToolStripMenuItem();
         _menu.SuspendLayout();
@@ -330,12 +346,17 @@ partial class PackageViewerForm
         _helpMenu.Text = "Help";
         ConfigureMenuItem(_openLogFolderMenuItem, "Open Log Folder", Keys.None, OnMenuOpenLogFolder);
         ConfigureMenuItem(_copyDiagnosticsMenuItem, "Copy Diagnostic Summary", Keys.None, OnMenuCopyDiagnostics);
+        ConfigureMenuItem(_checkUpdatesMenuItem, "Check for Updates", Keys.None, OnMenuCheckForUpdates);
+        ConfigureMenuItem(_checkUpdatesOnStartupMenuItem, "Check for updates on startup", Keys.None,
+            OnMenuToggleStartupUpdates);
+        _checkUpdatesOnStartupMenuItem.CheckOnClick = true;
         ConfigureMenuItem(_aboutMenuItem, "About", Keys.None, OnMenuAbout);
         ConfigureMenuItem(_kofiMenuItem, "Buy me a Ko-fi", Keys.None, OnMenuKofi);
         ConfigureMenuItem(_paypalMenuItem, "Support via PayPal", Keys.None, OnMenuPaypal);
         _helpMenu.DropDownItems.AddRange(new ToolStripItem[]
         {
             _openLogFolderMenuItem, _copyDiagnosticsMenuItem, _helpSeparator,
+            _checkUpdatesMenuItem, _checkUpdatesOnStartupMenuItem,
             _aboutMenuItem, _kofiMenuItem, _paypalMenuItem
         });
 

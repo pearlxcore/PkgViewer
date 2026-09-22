@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
+using DarkUI.Config;
 using DarkUI.Controls;
 using DarkUI.Forms;
 using PkgViewer.Core;
@@ -64,6 +66,12 @@ internal sealed partial class PackageViewerForm : DarkForm
 
         InitializeComponent();
 
+        // Apply after InitializeComponent: the header bar's own (hidden) theme selector applies a
+        // theme while it is constructed, so the saved/followed theme must be applied afterwards.
+        AppTheme.Apply(_settings);
+        InitializeThemeSelector();
+        _checkUpdatesOnStartupMenuItem.Checked = _settings.CheckUpdatesOnStartup;
+
         // Runtime population of designer-created controls (image list images).
         FileIcons.Populate(_fileIcons);
 
@@ -76,6 +84,51 @@ internal sealed partial class PackageViewerForm : DarkForm
         _previewPaneMenuItem.Checked = _settings.PreviewPaneVisible;
         SetPreviewPaneVisible(_settings.PreviewPaneVisible);
         RestoreFileLayout();
+    }
+
+    private bool _updatingTheme;
+
+    /// <summary>Populates the header theme combo with every built-in theme and selects the active one.</summary>
+    private void InitializeThemeSelector()
+    {
+        _updatingTheme = true;
+        try
+        {
+            _themeCombo.Items.Clear();
+            foreach (Theme theme in ThemeManager.Presets) _themeCombo.Items.Add(theme.Name);
+            int index = _themeCombo.Items.IndexOf(ThemeManager.Active.Name);
+            _themeCombo.SelectedIndex = index >= 0 ? index : 0;
+        }
+        finally
+        {
+            _updatingTheme = false;
+        }
+        PositionThemeCombo();
+    }
+
+    private void OnHeaderPanelResize(object? sender, EventArgs e) => PositionThemeCombo();
+
+    /// <summary>Keeps the theme combo at the top-right of the header as it resizes.</summary>
+    private void PositionThemeCombo()
+    {
+        int x = Math.Max(16, _headerPanel.ClientSize.Width - _themeCombo.Width - 16);
+        _themeCombo.Location = new Point(x, 12);
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        if (_settings.CheckUpdatesOnStartup) _ = CheckForUpdatesAsync(manual: false);
+    }
+
+    /// <summary>The user picked a theme; apply it and remember it so it stops following PS5 PKG Tool.</summary>
+    private void OnThemeSelected(object? sender, EventArgs e)
+    {
+        if (_updatingTheme || _themeCombo.SelectedItem is not string name) return;
+        if (AppTheme.Find(name) is not { } theme) return;
+        ThemeManager.Apply(theme);
+        _settings.Theme = theme.Name;
+        _settings.Save();
     }
 
     private async Task OnTabSelectedAsync()
@@ -2333,13 +2386,61 @@ internal sealed partial class PackageViewerForm : DarkForm
     private void OnMenuCopyDiagnostics(object? sender, EventArgs e) => CopyDiagnostics();
     private void OnMenuAbout(object? sender, EventArgs e) => new AboutForm(AppVersion()).ShowDialog(this);
 
-    /// <summary>The assembly version shown on the About window (e.g. "1.0.0").</summary>
-    private static string AppVersion()
+    /// <summary>The running assembly version, for example "1.2.0".</summary>
+    private static string AppVersion() => UpdateChecker.AppVersion();
+
+    private void OnMenuCheckForUpdates(object? sender, EventArgs e) => _ = CheckForUpdatesAsync(manual: true);
+
+    private void OnMenuToggleStartupUpdates(object? sender, EventArgs e)
     {
-        Version? version = typeof(PackageViewerForm).Assembly.GetName().Version;
-        if (version is null) return "1.1.0";
-        return version.Build >= 0 ? $"{version.Major}.{version.Minor}.{version.Build}" : $"{version.Major}.{version.Minor}";
+        _settings.CheckUpdatesOnStartup = _checkUpdatesOnStartupMenuItem.Checked;
+        _settings.Save();
     }
+
+    /// <summary>
+    /// Checks GitHub for a newer release. A manual check always reports the outcome; the automatic
+    /// startup check only speaks up when a newer version exists.
+    /// </summary>
+    private async Task CheckForUpdatesAsync(bool manual)
+    {
+        try
+        {
+            if (manual) _statusState.Text = "Checking for updates...";
+            Logger.Info($"Update check start (manual={manual}).");
+            UpdateCheck? check = await UpdateChecker.CheckAsync().ConfigureAwait(true);
+            if (check is null)
+            {
+                if (manual)
+                    DarkMessageBox.ShowInformation("No published releases were found.", "Check for updates");
+                return;
+            }
+
+            string current = AppVersion();
+            if (!check.IsNewerThan(current))
+            {
+                Logger.Info($"Update check: up to date (running {current}, latest {check.Latest}).");
+                if (manual) DarkMessageBox.ShowInformation("PkgViewer is up to date.", "Check for updates");
+                return;
+            }
+
+            Logger.Info($"Update check: newer version available ({check.Latest}, running {current}).");
+            using var dialog = new UpdateAvailableForm(check, current);
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                OpenExternalUrl(dialog.PageUrl);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            Logger.Exception("Update check", ex);
+            if (manual) DarkMessageBox.ShowError("Could not check for updates.\n\n" + ex.Message, "Check for updates");
+        }
+        finally
+        {
+            if (manual) _statusState.Text = "Ready";
+        }
+    }
+
     private void OnMenuKofi(object? sender, EventArgs e) => OpenExternalUrl(KoFiUrl);
     private void OnMenuPaypal(object? sender, EventArgs e) => OpenExternalUrl(PayPalUrl);
 

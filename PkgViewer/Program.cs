@@ -70,8 +70,11 @@ internal static class Program
             {
                 using var form = new PackageViewerForm(Path.Combine(Path.GetTempPath(), "pkgviewer-smoke.pkg"));
                 form.CreateControl();
-                using var about = new AboutForm("1.1.0");
+                using var about = new AboutForm("1.2.0");
                 about.CreateControl();
+                using var update = new UpdateAvailableForm(
+                    new UpdateCheck("9.9.9", "https://example.com", "### Fixes\n\n- Smoke test note."), "1.2.0");
+                update.CreateControl();
                 Logger.Info("Smoke: OK");
                 Environment.ExitCode = 0;
             }

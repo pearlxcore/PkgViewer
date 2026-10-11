@@ -41,6 +41,12 @@ internal sealed class AppSettings
     /// <summary>Check GitHub for a newer release when the viewer starts.</summary>
     public bool CheckUpdatesOnStartup { get; set; } = true;
 
+    /// <summary>
+    /// Running version the user was last offered an installed-copy update for, so the prompt shows
+    /// once per version instead of on every launch.
+    /// </summary>
+    public string UpdatePromptedVersion { get; set; } = string.Empty;
+
     public static AppSettings Load()
     {
         try
@@ -52,6 +58,7 @@ internal sealed class AppSettings
             settings.FileColumnWidths ??= string.Empty;
             settings.LastExtractionDirectory ??= string.Empty;
             settings.Theme ??= string.Empty;
+            settings.UpdatePromptedVersion ??= string.Empty;
             return settings;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)

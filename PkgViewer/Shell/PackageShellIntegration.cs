@@ -7,6 +7,9 @@ namespace PkgViewer.Shell;
 /// Per-user (HKCU) default-app candidate registration for the package extensions. Windows
 /// protects the actual user choice, so "set as default" opens the Default apps settings page;
 /// this type only makes PkgViewer a registered, selectable handler.
+///
+/// Registration points at a fixed managed copy under %LocalAppData%\PkgViewer, so the command path
+/// stays the same across releases and the user's default-app choice keeps working after an update.
 /// </summary>
 internal static class PackageShellIntegration
 {
@@ -15,6 +18,25 @@ internal static class PackageShellIntegration
     public const string ApplicationName = "PkgViewer";
 
     public static readonly string[] Extensions = [".pkg", ".ffpfsc", ".ffpkg", ".exfat"];
+
+    /// <summary>
+    /// Fixed per-user folder the viewer installs itself into, so the registered command path is
+    /// stable across releases.
+    /// </summary>
+    public static string InstallDirectory { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PkgViewer");
+
+    /// <summary>The managed copy of the viewer; the file associations always point here.</summary>
+    public static string InstalledExecutable { get; } = Path.Combine(InstallDirectory, "PkgViewer.exe");
+
+    /// <summary>True when the running executable is the managed install copy.</summary>
+    public static bool IsRunningInstalledCopy => PathsEqual(Environment.ProcessPath, InstalledExecutable);
+
+    /// <summary>The managed copy's file version, or null when it is not present.</summary>
+    public static Version? InstalledVersion => ReadVersion(InstalledExecutable);
+
+    /// <summary>The running executable's file version, or null when it cannot be read.</summary>
+    public static Version? RunningVersion => ReadVersion(Environment.ProcessPath);
 
     // ProgIds and executables written by the standalone/older PS4 and PS5 tools. These are what
     // leave a stale icon on .pkg once the old handler is gone.
@@ -36,9 +58,10 @@ internal static class PackageShellIntegration
 
     public static void Install()
     {
-        // Registration only ever adds PkgViewer; removing other tools' handlers is a separate,
-        // explicit action (RemoveLegacyAssociations) so installing this viewer never breaks them.
-        string executable = ResolveExecutable();
+        // Installs or refreshes the fixed managed copy and registers it. Registration only ever adds
+        // PkgViewer; removing other tools' handlers is a separate, explicit action
+        // (RemoveLegacyAssociations) so installing this viewer never breaks them.
+        string executable = EnsureInstalledCopy();
         using RegistryKey classes = Registry.CurrentUser.CreateSubKey(@"Software\Classes");
 
         using (RegistryKey progId = classes.CreateSubKey(ProgId))
@@ -101,6 +124,7 @@ internal static class PackageShellIntegration
             registered.DeleteValue(ApplicationName, throwOnMissingValue: false);
         Registry.CurrentUser.DeleteSubKeyTree(@"Software\PkgViewer", throwOnMissingSubKey: false);
 
+        RemoveInstalledCopy();
         ResetExtensionIcons();
     }
 
@@ -327,11 +351,67 @@ internal static class PackageShellIntegration
                LegacyExecutables.Any(executable => commandLine.Contains(executable, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string ResolveExecutable()
+    /// <summary>
+    /// Copies the running executable to the fixed install path when it is not already running from
+    /// there, and returns that path. This is what keeps the registered command stable across
+    /// releases so the user's default-app choice survives an update.
+    /// </summary>
+    public static string EnsureInstalledCopy()
     {
-        string? path = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+        string? running = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(running) || !File.Exists(running))
             throw new InvalidOperationException("Could not resolve the PkgViewer executable path.");
-        return path;
+        if (PathsEqual(running, InstalledExecutable)) return InstalledExecutable;
+
+        Directory.CreateDirectory(InstallDirectory);
+        File.Copy(running, InstalledExecutable, overwrite: true);
+        return InstalledExecutable;
+    }
+
+    /// <summary>Deletes the managed copy, unless it is the currently running executable.</summary>
+    private static void RemoveInstalledCopy()
+    {
+        try
+        {
+            if (IsRunningInstalledCopy) return; // cannot delete the running executable
+            if (File.Exists(InstalledExecutable)) File.Delete(InstalledExecutable);
+            if (Directory.Exists(InstallDirectory) &&
+                Directory.GetFileSystemEntries(InstallDirectory).Length == 0)
+                Directory.Delete(InstallDirectory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Best effort; removing the registration is what matters.
+        }
+    }
+
+    private static Version? ReadVersion(string? path)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+            string? text = FileVersionInfo.GetVersionInfo(path).FileVersion;
+            return Version.TryParse(text, out Version? version) ? version : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static bool PathsEqual(string? left, string? right)
+    {
+        if (string.IsNullOrEmpty(left) || string.IsNullOrEmpty(right)) return false;
+        try
+        {
+            return string.Equals(
+                Path.GetFullPath(left).TrimEnd('\\'),
+                Path.GetFullPath(right).TrimEnd('\\'),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+        }
     }
 }

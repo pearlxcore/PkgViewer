@@ -44,7 +44,16 @@ Grab the latest version from the [releases page](https://github.com/pearlxcore/P
 
 # Build
 
-Pkg Viewer shares the DarkUI and PS4/PS5 PKG Tool sources, so build it from the same workspace:
+Building from source needs these projects cloned next to this repository (same parent folder, with these exact folder names):
+
+```
+git clone https://github.com/pearlxcore/DarkUI
+git clone https://github.com/pearlxcore/PS4-PKG-Tool PS4PKGTool
+git clone https://github.com/pearlxcore/PS5PKGTool
+git clone https://github.com/pearlxcore/PkgViewer
+```
+
+Then build with the .NET 10 SDK:
 
 ```
 dotnet build .\PkgViewer.slnx -c Release

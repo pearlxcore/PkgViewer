@@ -6,9 +6,10 @@ using PkgViewer.Shell;
 namespace PkgViewer.Forms;
 
 /// <summary>
-/// Shown on every bare launch. Copies the viewer to a fixed folder and explains the one manual step
-/// Windows needs to make PkgViewer open .pkg files, with a button that copies that folder to the
-/// clipboard. "Close" dismisses it; "Open file" dismisses it and continues to the file picker.
+/// Shown on every bare launch. Copies the viewer to a fixed folder and registers it as a handler for
+/// .pkg, .ffpfsc, .ffpkg and .exfat (unassigned types become PkgViewer automatically), then explains
+/// the one manual step Windows needs for types that already belong to another app. "Close" dismisses
+/// it; "Open file" dismisses it and continues to the file picker.
 /// </summary>
 internal sealed class IntegrationPromptForm : DarkForm
 {
@@ -29,18 +30,17 @@ internal sealed class IntegrationPromptForm : DarkForm
         ShowInTaskbar = false;
         ClientSize = new Size(560, 264);
 
-        _folder = ResolveInstallFolder();
+        _folder = RunSetup();
 
         _message.Location = new Point(16, 16);
         _message.Size = new Size(528, 196);
         _message.Text =
             "Set .pkg files to open with PkgViewer\n\n" +
-            "PkgViewer was copied to:\n" + _folder + "\n\n" +
-            "Windows needs one manual step:\n" +
-            "1. Right-click a .pkg file and choose Properties.\n" +
+            "PkgViewer is registered for .pkg, .ffpfsc, .ffpkg and .exfat, with a copy in:\n" + _folder + "\n\n" +
+            "If a type still opens with another app, set it once:\n" +
+            "1. Right-click a file of that type and choose Properties.\n" +
             "2. Next to \"Opens with\", click Change.\n" +
-            "3. Choose \"More apps\" / \"Choose another app\" and browse to the folder above.\n" +
-            "4. Pick PkgViewer.exe, tick \"Always use this app\", and click OK.";
+            "3. Pick PkgViewer and tick \"Always use this app\".";
 
         _copy.Text = "Copy folder";
         _copy.Location = new Point(16, 216);
@@ -84,20 +84,20 @@ internal sealed class IntegrationPromptForm : DarkForm
     }
 
     /// <summary>
-    /// Copies the viewer into %LocalAppData%\PkgViewer (a stable path) and returns that folder. Falls
-    /// back to the running folder if the copy fails.
+    /// Copies the viewer into %LocalAppData%\PkgViewer and registers it for the package types, then
+    /// returns that folder. Falls back to the running folder if setup fails.
     /// </summary>
-    private static string ResolveInstallFolder()
+    private static string RunSetup()
     {
         try
         {
-            string installed = PackageShellIntegration.EnsureInstalledCopy();
-            string? directory = Path.GetDirectoryName(installed);
+            PackageShellIntegration.Install();
+            string? directory = Path.GetDirectoryName(PackageShellIntegration.InstalledExecutable);
             if (!string.IsNullOrEmpty(directory)) return directory;
         }
         catch (Exception ex)
         {
-            Logger.Exception("Copy viewer", ex);
+            Logger.Exception("Setup", ex);
         }
 
         string? process = Environment.ProcessPath;

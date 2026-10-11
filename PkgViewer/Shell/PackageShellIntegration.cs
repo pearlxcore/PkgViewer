@@ -366,6 +366,15 @@ internal static class PackageShellIntegration
             throw new InvalidOperationException("Could not resolve the PkgViewer executable path.");
         if (PathsEqual(running, InstalledExecutable)) return InstalledExecutable;
 
+        // Skip the copy when the managed copy is already at least the running version.
+        Version? runningVersion = ReadVersion(running);
+        if (runningVersion is not null && File.Exists(InstalledExecutable))
+        {
+            Version? installedVersion = ReadVersion(InstalledExecutable);
+            if (installedVersion is not null && installedVersion >= runningVersion)
+                return InstalledExecutable;
+        }
+
         Directory.CreateDirectory(InstallDirectory);
         File.Copy(running, InstalledExecutable, overwrite: true);
         return InstalledExecutable;

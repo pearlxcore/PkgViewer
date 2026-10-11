@@ -1,87 +1,84 @@
 using DarkUI.Controls;
 using DarkUI.Forms;
 using PkgViewer.Infrastructure;
-using PkgViewer.Shell;
 
 namespace PkgViewer.Forms;
 
 /// <summary>
-/// First-run prompt offering to set PkgViewer up: install a managed copy under %LocalAppData% and
-/// register it as a package-file viewer. On success the dialog switches to a confirmation state and
-/// opens the Windows Default apps page so the user can make it the default once.
+/// Shown on every bare launch. Explains the one manual step Windows needs to make PkgViewer open
+/// .pkg files, with a button that copies the viewer's folder to the clipboard. "Close" dismisses it;
+/// "Open file" dismisses it and continues to the file picker.
 /// </summary>
 internal sealed class IntegrationPromptForm : DarkForm
 {
     private readonly DarkLabel _message = new();
-    private readonly DarkButton _primary = new();
-    private readonly DarkButton _decline = new();
-    private bool _integrated;
-    private bool _declined;
+    private readonly DarkButton _copy = new();
+    private readonly DarkButton _close = new();
+    private readonly DarkButton _openFile = new();
+    private readonly string _folder;
 
     public IntegrationPromptForm()
     {
         AppIcon.Apply(this);
-        Text = "PkgViewer Setup";
+        Text = "PkgViewer";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterScreen;
         MaximizeBox = false;
         MinimizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(500, 244);
+        ClientSize = new Size(560, 248);
 
-        _message.Location = new Point(18, 16);
-        _message.Size = new Size(464, 158);
+        string? process = Environment.ProcessPath;
+        _folder = (process is not null ? Path.GetDirectoryName(process) : null) ?? process ?? string.Empty;
+
+        _message.Location = new Point(16, 16);
+        _message.Size = new Size(528, 180);
         _message.Text =
-            "Set up PkgViewer?\n\n" +
-            "A copy is installed to:\n" + PackageShellIntegration.InstallDirectory + "\n\n" +
-            "and registered as a viewer for .pkg, .ffpfsc, .ffpkg and .exfat. Windows will then ask " +
-            "you to confirm PkgViewer as the default the first time you open one.";
+            "Set .pkg files to open with PkgViewer\n\n" +
+            "Windows needs you to do this once:\n" +
+            "1. Right-click a .pkg file and choose Properties.\n" +
+            "2. Next to \"Opens with\", click Change.\n" +
+            "3. Choose \"More apps\" / \"Choose another app\" and browse to:\n" +
+            _folder + "\n" +
+            "4. Pick PkgViewer.exe, tick \"Always use this app\", and click OK.";
 
-        _primary.Text = "Set up";
-        _primary.Location = new Point(216, 194);
-        _primary.Size = new Size(126, 32);
-        _primary.Click += OnPrimaryClick;
+        _copy.Text = "Copy folder";
+        _copy.Location = new Point(16, 200);
+        _copy.Size = new Size(140, 32);
+        _copy.Click += OnCopyClick;
 
-        _decline.Text = "Not now";
-        _decline.Location = new Point(352, 194);
-        _decline.Size = new Size(120, 32);
-        _decline.Click += (_, _) => { _declined = true; Close(); };
+        _close.Text = "Close";
+        _close.Location = new Point(300, 200);
+        _close.Size = new Size(120, 32);
+        _close.Click += (_, _) => { OpenFilePicker = false; Close(); };
 
-        AcceptButton = _primary;
-        CancelButton = _decline;
+        _openFile.Text = "Open file";
+        _openFile.Location = new Point(424, 200);
+        _openFile.Size = new Size(120, 32);
+        _openFile.Click += (_, _) => { OpenFilePicker = true; Close(); };
 
-        Controls.AddRange([_message, _primary, _decline]);
+        AcceptButton = _close;
+        CancelButton = _close;
+
+        Controls.AddRange([_message, _copy, _close, _openFile]);
     }
 
-    /// <summary>True when the user completed the setup.</summary>
-    public bool Integrated => _integrated;
+    /// <summary>True when the user chose "Open file" and the caller should open the file picker.</summary>
+    public bool OpenFilePicker { get; private set; }
 
-    /// <summary>True when the user chose "Not now" without setting up.</summary>
-    public bool Declined => _declined;
-
-    private void OnPrimaryClick(object? sender, EventArgs e)
+    private void OnCopyClick(object? sender, EventArgs e)
     {
-        if (_integrated)
-        {
-            Close();
-            return;
-        }
-
         try
         {
-            PackageShellIntegration.Install();
-            _integrated = true;
-            _message.Text =
-                "Set up complete.\n\n" +
-                "Opening Windows Default apps so you can pick PkgViewer for .pkg.";
-            _primary.Text = "OK";
-            _primary.Location = new Point(352, 194);
-            _decline.Visible = false;
-            PackageShellIntegration.OpenDefaultAppsSettings();
+            if (_folder.Length > 0)
+            {
+                Clipboard.SetText(_folder);
+                _copy.Text = "Copied!";
+            }
         }
         catch (Exception ex)
         {
-            Logger.Exception("Integration prompt", ex);
+            Logger.Exception("Copy folder", ex);
             DarkMessageBox.ShowError(ex.Message, "PkgViewer");
         }
     }

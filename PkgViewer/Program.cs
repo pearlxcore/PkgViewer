@@ -92,22 +92,14 @@ internal static class Program
         }
 
         string? path = ResolvePackagePath(args);
-        AppSettings settings = AppSettings.Load();
 
-        if (args.Length == 0 && !settings.IntegrationPromptShown && !settings.IntegrationPromptDeclined &&
-            !PackageShellIntegration.IsInstalled())
+        if (args.Length == 0)
         {
-            // First-run (bare launch only): offer to set the viewer up once. Either choice is
-            // remembered, and the app continues to the file picker either way.
+            // Bare launch: show how to make .pkg open with PkgViewer. Nothing here changes the
+            // association; "Not now" continues to the picker.
             using var prompt = new IntegrationPromptForm();
             prompt.ShowDialog();
-            if (prompt.Integrated) settings.IntegrationPromptShown = true;
-            if (prompt.Declined) settings.IntegrationPromptDeclined = true;
-            if (prompt.Integrated || prompt.Declined) settings.Save();
-        }
-        else
-        {
-            OfferInstalledUpdate(settings);
+            if (!prompt.OpenFilePicker) return;
         }
 
         if (path is null)
@@ -130,43 +122,6 @@ internal static class Program
 
         Logger.Info($"Opening '{path}'.");
         Application.Run(new PackageViewerForm(path));
-    }
-
-    /// <summary>
-    /// When a newer portable copy runs while an older managed copy is installed, offer to update the
-    /// managed copy (and its registration) so the file association keeps working. Asked once per
-    /// version.
-    /// </summary>
-    private static void OfferInstalledUpdate(AppSettings settings)
-    {
-        if (!PackageShellIntegration.IsInstalled() || PackageShellIntegration.IsRunningInstalledCopy) return;
-
-        Version? running = PackageShellIntegration.RunningVersion;
-        Version? installed = PackageShellIntegration.InstalledVersion;
-        if (running is null || installed is null || running <= installed) return;
-
-        string version = running.ToString(3);
-        if (string.Equals(settings.UpdatePromptedVersion, version, StringComparison.OrdinalIgnoreCase)) return;
-
-        settings.UpdatePromptedVersion = version;
-        settings.Save();
-
-        DialogResult answer = DarkMessageBox.DialogYesNo(
-            $"PkgViewer {version} is newer than the installed copy ({installed.ToString(3)}).\n\n" +
-            "Update the installed copy that package files open with?",
-            "PkgViewer");
-        if (answer != DialogResult.Yes) return;
-
-        try
-        {
-            PackageShellIntegration.Install();
-            Logger.Info($"Installed copy updated to {version}.");
-        }
-        catch (Exception ex)
-        {
-            Logger.Exception("Installed copy update", ex);
-            DarkMessageBox.ShowError(ex.Message, "PkgViewer");
-        }
     }
 
     private static string? ResolvePackagePath(string[] args)

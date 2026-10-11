@@ -32,6 +32,9 @@ internal static class PackageShellIntegration
     /// <summary>True when the running executable is the managed install copy.</summary>
     public static bool IsRunningInstalledCopy => PathsEqual(Environment.ProcessPath, InstalledExecutable);
 
+    /// <summary>True when the managed install copy exists on disk.</summary>
+    public static bool HasInstalledCopy => File.Exists(InstalledExecutable);
+
     /// <summary>The managed copy's file version, or null when it is not present.</summary>
     public static Version? InstalledVersion => ReadVersion(InstalledExecutable);
 

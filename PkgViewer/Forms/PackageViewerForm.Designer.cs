@@ -17,7 +17,8 @@ partial class PackageViewerForm
     private DarkLabel _titleLabel = null!;
     private DarkLabel _subtitleLabel = null!;
     private DarkLabel _contentIdLabel = null!;
-    private DarkComboBox _themeCombo = null!;
+    private DarkToolStripComboBox _themeCombo = null!;
+    private DarkToolStripLabel _themeLabel = null!;
 
     // Menu
     private DarkMenuStrip _menu = null!;
@@ -195,7 +196,8 @@ partial class PackageViewerForm
         _titleLabel = new DarkLabel();
         _subtitleLabel = new DarkLabel();
         _contentIdLabel = new DarkLabel();
-        _themeCombo = new DarkComboBox();
+        _themeCombo = new DarkToolStripComboBox();
+        _themeLabel = new DarkToolStripLabel("Theme:");
         _headerPanel.SuspendLayout();
         SuspendLayout();
 
@@ -203,7 +205,6 @@ partial class PackageViewerForm
         _headerPanel.Dock = DockStyle.Top;
         _headerPanel.Height = 104;
         _headerPanel.Padding = new Padding(16, 12, 16, 12);
-        _headerPanel.Resize += OnHeaderPanelResize;
 
         _iconBox.Location = new Point(16, 10);
         _iconBox.Size = new Size(84, 84);
@@ -212,6 +213,7 @@ partial class PackageViewerForm
 
         _titleLabel.Text = "PKG Viewer";
         _titleLabel.Font = new Font("Segoe UI", 16F, FontStyle.Bold);
+        _titleLabel.AutoSize = false;
         _titleLabel.AutoEllipsis = true;
         _titleLabel.Cursor = Cursors.Hand;
         _titleLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
@@ -220,25 +222,18 @@ partial class PackageViewerForm
         _titleLabel.DoubleClick += OnTitleDoubleClick;
 
         _subtitleLabel.Text = "Reading package metadata...";
+        _subtitleLabel.AutoSize = false;
         _subtitleLabel.AutoEllipsis = true;
         _subtitleLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _subtitleLabel.Location = new Point(118, 45);
         _subtitleLabel.Size = new Size(680, 17);
 
+        _contentIdLabel.AutoSize = false;
         _contentIdLabel.AutoEllipsis = true;
         _contentIdLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _contentIdLabel.Location = new Point(118, 66);
         _contentIdLabel.Size = new Size(680, 17);
 
-        _themeCombo.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-        _themeCombo.DropDownStyle = ComboBoxStyle.DropDownList;
-        _themeCombo.Location = new Point(834, 12);
-        _themeCombo.Name = "_themeCombo";
-        _themeCombo.Size = new Size(250, 24);
-        _themeCombo.TabIndex = 0;
-        _themeCombo.SelectedIndexChanged += OnThemeSelected;
-
-        _headerPanel.Controls.Add(_themeCombo);
         _headerPanel.Controls.Add(_contentIdLabel);
         _headerPanel.Controls.Add(_subtitleLabel);
         _headerPanel.Controls.Add(_titleLabel);
@@ -290,6 +285,16 @@ partial class PackageViewerForm
 
         _menu.Dock = DockStyle.Top;
         _menu.Font = new Font("Segoe UI", 9F);
+
+        _themeLabel.Alignment = ToolStripItemAlignment.Right;
+        _themeLabel.Margin = new Padding(0, 0, 4, 0);
+        _themeCombo.Alignment = ToolStripItemAlignment.Right;
+        _themeCombo.AutoSize = false;
+        _themeCombo.Name = "_themeCombo";
+        _themeCombo.Size = new Size(240, 24);
+        _themeCombo.Margin = new Padding(10, 4, 30, 4);
+        _themeCombo.ComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+        _themeCombo.ComboBox.SelectedIndexChanged += OnThemeSelected;
 
         _fileMenu.Text = "File";
         ConfigureMenuItem(_openMenuItem, "Open...", Keys.Control | Keys.O, OnMenuOpen);
@@ -360,7 +365,7 @@ partial class PackageViewerForm
             _aboutMenuItem, _kofiMenuItem, _paypalMenuItem
         });
 
-        _menu.Items.AddRange(new ToolStripItem[] { _fileMenu, _editMenu, _viewMenu, _toolsMenu, _helpMenu });
+        _menu.Items.AddRange(new ToolStripItem[] { _fileMenu, _editMenu, _viewMenu, _toolsMenu, _helpMenu, _themeCombo, _themeLabel });
 
         // ---------------- Status ----------------
         _statusStrip = new DarkStatusStrip();
@@ -818,6 +823,7 @@ partial class PackageViewerForm
         _fileTree.ShowRootLines = true;
         _fileTree.ImageList = _fileIcons;
         _fileTree.Dock = DockStyle.Fill;
+        _fileTree.BeforeExpand += OnFileTreeBeforeExpand;
         _fileTree.AfterSelect += OnFileTreeAfterSelect;
         _fileTree.NodeMouseClick += OnFileTreeNodeMouseClick;
         _fileTree.NodeMouseDoubleClick += OnFileTreeNodeDoubleClick;

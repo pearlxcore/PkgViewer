@@ -52,7 +52,10 @@ internal sealed partial class PackageViewerForm : DarkForm
     private bool _closing;
     private bool _closeAfterExtraction;
     private readonly System.Windows.Forms.Timer _fileSearchDebounce = new() { Interval = 200 };
+    // Marks a directory tree node whose children have not been materialized yet (lazy file tree).
+    private static readonly object LazyPlaceholder = new();
     private TreeNode? _fileRootNode;
+    private List<PackageFileNode> _fileModelRoots = [];
     private DataGridView? _contextGrid;
     private string _lastExtractionDirectory;
     private readonly List<Image> _trophyImages = [];
@@ -88,7 +91,7 @@ internal sealed partial class PackageViewerForm : DarkForm
 
     private bool _updatingTheme;
 
-    /// <summary>Populates the header theme combo with every built-in theme and selects the active one.</summary>
+    /// <summary>Populates the menu theme combo with every built-in theme and selects the active one.</summary>
     private void InitializeThemeSelector()
     {
         _updatingTheme = true;
@@ -103,16 +106,6 @@ internal sealed partial class PackageViewerForm : DarkForm
         {
             _updatingTheme = false;
         }
-        PositionThemeCombo();
-    }
-
-    private void OnHeaderPanelResize(object? sender, EventArgs e) => PositionThemeCombo();
-
-    /// <summary>Keeps the theme combo at the top-right of the header as it resizes.</summary>
-    private void PositionThemeCombo()
-    {
-        int x = Math.Max(16, _headerPanel.ClientSize.Width - _themeCombo.Width - 16);
-        _themeCombo.Location = new Point(x, 12);
     }
 
     protected override void OnShown(EventArgs e)
@@ -124,7 +117,7 @@ internal sealed partial class PackageViewerForm : DarkForm
     /// <summary>The user picked a theme; apply it and remember it so it stops following PS5 PKG Tool.</summary>
     private void OnThemeSelected(object? sender, EventArgs e)
     {
-        if (_updatingTheme || _themeCombo.SelectedItem is not string name) return;
+        if (_updatingTheme || _themeCombo.ComboBox.SelectedItem is not string name) return;
         if (AppTheme.Find(name) is not { } theme) return;
         ThemeManager.Apply(theme);
         _settings.Theme = theme.Name;
@@ -646,13 +639,17 @@ internal sealed partial class PackageViewerForm : DarkForm
         try
         {
             _fileTree.Nodes.Clear();
+            // The directory model is built eagerly (cheap), but only the root's children are turned
+            // into tree nodes here; deeper levels are materialized lazily as the user expands them.
+            _fileModelRoots = PackageFileTree.Build(_allFiles);
             // A synthetic root presents top-level files and folders together.
             var root = new TreeNode("Package root") { Tag = null, ImageIndex = FileIcons.Folder, SelectedImageIndex = FileIcons.FolderOpen };
-            foreach (PackageFileNode model in PackageFileTree.Build(_allFiles))
-                AddTreeNode(root.Nodes, model);
-            root.Expand();
+            if (_fileModelRoots.Count > 0)
+                root.Nodes.Add(new TreeNode(string.Empty) { Tag = LazyPlaceholder });
             _fileRootNode = root;
             _fileTree.Nodes.Add(root);
+            // Expanding now triggers BeforeExpand, which materializes the top level.
+            root.Expand();
         }
         finally
         {
@@ -665,15 +662,59 @@ internal sealed partial class PackageViewerForm : DarkForm
             RefreshFileList();
     }
 
-    private static void AddTreeNode(TreeNodeCollection collection, PackageFileNode model)
+    private void OnFileTreeBeforeExpand(object? sender, TreeViewCancelEventArgs e) => MaterializeFileNode(e.Node);
+
+    /// <summary>
+    /// Materializes a node's immediate children. A directory node is left with a single placeholder
+    /// child (tagged <see cref="LazyPlaceholder"/>) so its expand glyph shows until it is first opened.
+    /// </summary>
+    private void MaterializeFileNode(TreeNode node)
     {
-        var node = new TreeNode(model.Name) { Tag = model };
-        int icon = model.IsDirectory ? FileIcons.Folder : FileIcons.IconFor(model.Name);
-        node.ImageIndex = icon;
-        node.SelectedImageIndex = icon;
-        collection.Add(node);
-        foreach (PackageFileNode child in model.Children)
-            AddTreeNode(node.Nodes, child);
+        if (node.Nodes.Count > 0 && !ReferenceEquals(node.Nodes[0].Tag, LazyPlaceholder)) return;
+
+        IReadOnlyList<PackageFileNode> models = ReferenceEquals(node, _fileRootNode)
+            ? _fileModelRoots
+            : (node.Tag as PackageFileNode)?.Children ?? [];
+
+        _fileTree.BeginUpdate();
+        try
+        {
+            node.Nodes.Clear();
+            foreach (PackageFileNode model in models)
+            {
+                int icon = model.IsDirectory ? FileIcons.Folder : FileIcons.IconFor(model.Name);
+                var child = new TreeNode(model.Name) { Tag = model, ImageIndex = icon, SelectedImageIndex = icon };
+                if (model.IsDirectory && model.Children.Count > 0)
+                    child.Nodes.Add(new TreeNode(string.Empty) { Tag = LazyPlaceholder });
+                node.Nodes.Add(child);
+            }
+        }
+        finally
+        {
+            _fileTree.EndUpdate();
+        }
+    }
+
+    /// <summary>Materializes every level of the tree (used by filtering, expand-all, and extraction).</summary>
+    private void EnsureFullTreeMaterialized()
+    {
+        if (_fileRootNode is null) return;
+        _fileTree.BeginUpdate();
+        try
+        {
+            MaterializeRecursive(_fileRootNode);
+        }
+        finally
+        {
+            _fileTree.EndUpdate();
+        }
+    }
+
+    private void MaterializeRecursive(TreeNode node)
+    {
+        MaterializeFileNode(node);
+        foreach (TreeNode child in node.Nodes)
+            MaterializeRecursive(child);
     }
 
     private static void AddJsonTreeNode(TreeNodeCollection collection, JsonTreeNode model)
@@ -718,6 +759,8 @@ internal sealed partial class PackageViewerForm : DarkForm
         {
             _fileMatchCount = 0;
             _fileLimitHit = false;
+            // Matching walks the tree; materialize it first so lazily-hidden levels are searched too.
+            EnsureFullTreeMaterialized();
             _fileList.BeginUpdate();
             try
             {
@@ -729,6 +772,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         }
         else
         {
+            _fileLimitHit = false;
             TreeNode? folder = CurrentFolderNode();
             if (folder is not null)
             {
@@ -747,7 +791,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         if (!_busy)
             _statusState.Text = filtering
                 ? (_fileLimitHit ? $"First {count:N0} matches shown - refine the filter." : $"{count:N0} match(es).")
-                : $"{count:N0} item(s).";
+                : (_fileLimitHit ? $"First {count:N0} item(s) shown - open a subfolder." : $"{count:N0} item(s).");
     }
 
     /// <summary>The folder whose contents the list shows: the selected folder, or a file's parent.</summary>
@@ -764,6 +808,7 @@ internal sealed partial class PackageViewerForm : DarkForm
 
     private void PopulateFileList(TreeNode folder)
     {
+        _fileLimitHit = false;
         _fileList.BeginUpdate();
         try
         {
@@ -776,10 +821,17 @@ internal sealed partial class PackageViewerForm : DarkForm
                     ImageIndex = FileIcons.FolderOpen
                 });
 
+            int added = 0;
             foreach (TreeNode child in folder.Nodes)
             {
                 if (child.Tag is not PackageFileNode model) continue;
+                if (added >= MaximumFileItems)
+                {
+                    _fileLimitHit = true;
+                    break;
+                }
                 _fileList.Items.Add(BuildFileListItem(child, model));
+                added++;
             }
         }
         finally
@@ -1118,7 +1170,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         {
             if (item.Tag is not TreeNode node || ReferenceEquals(node, _fileRootNode)) continue;
             if (node.Tag is not PackageFileNode model) continue;
-            if (model.IsDirectory) paths.AddRange(CollectFilePaths(node));
+            if (model.IsDirectory) paths.AddRange(CollectFilePaths(model));
             else paths.Add(model.FullPath);
         }
         return paths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -1129,7 +1181,7 @@ internal sealed partial class PackageViewerForm : DarkForm
         var paths = new List<string>();
         if (_fileTree.SelectedNode is { } node && node.Tag is PackageFileNode model)
         {
-            if (model.IsDirectory) paths.AddRange(CollectFilePaths(node));
+            if (model.IsDirectory) paths.AddRange(CollectFilePaths(model));
             else paths.Add(model.FullPath);
         }
         return paths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -1343,18 +1395,18 @@ internal sealed partial class PackageViewerForm : DarkForm
         return true;
     }
 
-    private static string[] CollectFilePaths(TreeNode node)
+    private static string[] CollectFilePaths(PackageFileNode directory)
     {
         var paths = new List<string>();
-        void Walk(TreeNode current)
+        void Walk(PackageFileNode current)
         {
-            foreach (TreeNode child in current.Nodes)
+            foreach (PackageFileNode child in current.Children)
             {
-                if (child.Tag is PackageFileNode model && !model.IsDirectory) paths.Add(model.FullPath);
-                Walk(child);
+                if (child.IsDirectory) Walk(child);
+                else paths.Add(child.FullPath);
             }
         }
-        Walk(node);
+        Walk(directory);
         return [.. paths];
     }
 
@@ -2317,7 +2369,11 @@ internal sealed partial class PackageViewerForm : DarkForm
     private void OnTreeContextExtract(object? sender, EventArgs e) => _ = ExtractTreeSelectionAsync();
     private void OnTreeContextExpand(object? sender, EventArgs e) => _fileTree.SelectedNode?.Expand();
     private void OnTreeContextCollapse(object? sender, EventArgs e) => _fileTree.SelectedNode?.Collapse();
-    private void OnTreeContextExpandAll(object? sender, EventArgs e) => _fileTree.ExpandAll();
+    private void OnTreeContextExpandAll(object? sender, EventArgs e)
+    {
+        EnsureFullTreeMaterialized();
+        _fileTree.ExpandAll();
+    }
     private void OnTreeContextCollapseAll(object? sender, EventArgs e) => _fileTree.CollapseAll();
     private void OnTreeContextCopyPath(object? sender, EventArgs e) => CopySelectedTreePath();
     private void OnTreeContextCopyName(object? sender, EventArgs e) => CopySelectedTreeName();

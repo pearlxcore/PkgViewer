@@ -6,7 +6,7 @@ A quick little viewer for PS4 and PS5 packages. Open a package or an image, poke
 
 # Support My Work
 
-[![ko-fi](https://github.com/user-attachments/assets/be9cc4be-3352-4bd5-8086-05c30930f81d)](https://ko-fi.com/R6R524N7X)
+[![ko-fi](https://github.com/user-attachments/assets/93da7a03-e740-4f79-9add-8b3741239b2f)](https://ko-fi.com/R6R524N7X)
 
 [![paypal](https://user-images.githubusercontent.com/36906814/102657760-39d1ce00-41b1-11eb-96fe-c10e2d9b3f39.png)](https://www.paypal.com/paypalme/pearlxcoree)
 
